@@ -1,0 +1,108 @@
+services:
+  - type: web
+    name: ixplor-app
+    runtime: node
+    plan: free
+    repo: https://github.com/NomadNiko/ixplor-app
+    buildCommand: yarn install && yarn build
+    startCommand: yarn start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: https://api.ixplor.app/api
+      - key: NEXT_PUBLIC_IS_SIGN_UP_ENABLED
+        value: true
+      - key: NEXT_PUBLIC_IS_GOOGLE_AUTH_ENABLED
+        value: true
+      - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+        value: 459247012471-vr309bv56civlr3hdqqm0i796oehlen6.apps.googleusercontent.com
+      - key: NEXT_PUBLIC_IS_FACEBOOK_AUTH_ENABLED
+        value: true
+      - key: NEXT_PUBLIC_FACEBOOK_APP_ID
+        value: 605927245326212
+      - key: NEXT_PUBLIC_FILE_DRIVER
+        value: s3
+
+  - type: web
+    name: ixplor-server
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: yarn install && yarn build
+    startCommand: yarn start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_NAME
+        value: 'iXplor API'
+      - key: API_PREFIX
+        value: api
+      - key: APP_FALLBACK_LANGUAGE
+        value: en
+      - key: APP_HEADER_LANGUAGE
+        value: x-custom-lang
+      - key: DATABASE_TYPE
+        value: mongodb
+      - key: DATABASE_PORT
+        value: '27017'
+      - key: DATABASE_URL
+        value: 'mongodb+srv://nomadniko:123QWEasd@cluster0.vf9ss.mongodb.net/ixplor?retryWrites=true&w=majority&appName=Cluster0'
+      # AWS S3
+      - key: FILE_DRIVER
+        value: s3
+      - key: AWS_S3_REGION
+        value: us-east-2
+      - key: AWS_DEFAULT_S3_BUCKET
+        value: ixplor-app-s3-bucket-01
+      - key: ACCESS_KEY_ID
+        value: AKIAYEKP5TCXCXSXBGTV
+      - key: SECRET_ACCESS_KEY
+        value: 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
+      # Email
+      - key: MAIL_HOST
+        value: smtp.resend.com
+      - key: MAIL_PORT
+        value: '587'
+      - key: MAIL_PROVIDER
+        value: resend
+      - key: RESEND_API_KEY
+        value: re_7cvkWWG8_x7irMNQARTfuKztWixkgnHMf
+      - key: MAIL_FROM
+        value: no-reply@ixplor.app
+      - key: MAIL_DEFAULT_EMAIL
+        value: no-reply@ixplor.app
+      - key: MAIL_DEFAULT_NAME
+        value: iXplor
+      - key: MAIL_IGNORE_TLS
+        value: false
+      - key: MAIL_SECURE
+        value: false
+      - key: MAIL_REQUIRE_TLS
+        value: false
+      # Auth
+      - key: AUTH_JWT_SECRET
+        value: 'jwtPS+rdlEzxl4Ei7TrsKoVJ1kx+iBVEFyS/QM1QBeOntwZe0Kk2SSev5HF+OE8kXhkLZDrqz8tP9Zr0fRvYKLYL05kJLNUt4YRQxhqQlxgGnH3kX6oN5T64ZyOT1n4SyDJk2gcaF1SbQfvYj/itiIF1kKlx7UY3spbM/JsDyZHePbLN+BaYBewUVV9YXPCWwXm+oQq/HmjKGqZz+FH9zN4iGxwT8yYkGBvNEgZc3kGgDk1nkAa4Ih7DyQF49w2d'
+      - key: AUTH_JWT_TOKEN_EXPIRES_IN
+        value: '15m'
+      - key: AUTH_REFRESH_SECRET
+        value: 'refKm1g0+ZnQkWXNzEqR4Yw7YDTaLufZF+n9KA/nQPtNhF1RdP1YWWDaAQOQpBL+yK8LHT3T2LoGGIEIJwYM3t+JARQi1JXC/96VCJsDSUQ9LImzPyjSQNhFO5yiAY5rrsmB2ELOIEbTq9hNTl4gVTyUxjT8KZOdv7Ct4XdVD85MbdY7N5eKPIpXvR6YU6IaP+SXK9h6CHqAwBCrVqnk2eLrA0GnNxgT1LPLg1JZDzEMJCbDmuRhsRwG8q3Vdqwn'
+      - key: AUTH_REFRESH_TOKEN_EXPIRES_IN
+        value: '3650d'
+      - key: AUTH_FORGOT_SECRET
+        value: 'forgSYWz7eQlUbVZ+4NEtvwujyJOKR26d8xPoMnhLqBi/K3c0pIFmX1aY9gDHTCA5kGvN/r2xLgd4UmwQn+yMBE8tDf5WaI9jTRu1ChS0vAqZbHxXNPnzOekL3QJ7YmiV9cFfwGsDyNtB6ULpEM4IkhWxRa2mny8l/TvQjcPd5K9wYXurJNqMHhL1aegDBb0SO3FmLVnI4xKwC9p7dEvz8QRtUbN/TQ5iPWjYEsDyXMK6HkAtGvL4c2qw9nxZURm'
+      - key: AUTH_FORGOT_TOKEN_EXPIRES_IN
+        value: '30m'
+      - key: AUTH_CONFIRM_EMAIL_SECRET
+        value: 'confgUwQ2mPXj4+ZLtbSkVrayEHnMI7cFR6xKvNdw9OzBh3iC5YAmWD8qTs0J1eoGBp/L7IuKfvN4xQn9yEkVhLcMj5aXtRwY2OSbAU8vPmzHdGeW1nKi6TyF9B4CxJQ3alNwDv7qopEM+uLI5khSxRbVmny8l/TvQjcPd5K9wYXurJNqMHhL1aegDBb0SO3FmLVnI4xKwC9p7dEvz8QRtUbN/TQ5iPWjYEsDyXMK6HkAtGvL4c2qw9nxZURm'
+      - key: AUTH_CONFIRM_EMAIL_TOKEN_EXPIRES_IN
+        value: '1d'
+      # Social Auth
+      - key: GOOGLE_CLIENT_ID
+        value: 459247012471-vr309bv56civlr3hdqqm0i796oehlen6.apps.googleusercontent.com
+      - key: GOOGLE_CLIENT_SECRET
+        value: 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
+      - key: FACEBOOK_APP_ID
+        value: 605927245326212
+      - key: FACEBOOK_APP_SECRET
+        value: dbb0a72d1f0b649afbd01f5e036848a6
