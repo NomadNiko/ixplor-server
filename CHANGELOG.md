@@ -498,7 +498,6 @@
 - **i18n:** header resolver [#750](https://github.com/brocoders/nestjs-boilerplate/issues/750) ([a8f6ca2](https://github.com/brocoders/nestjs-boilerplate/commit/a8f6ca28267e35d170da6e11d150529bad4604dc))
 - **login:** login with extra space in email ([58ba399](https://github.com/brocoders/nestjs-boilerplate/commit/58ba3995bdd601f29fd9dc0c832fb9458417fb47))
 - npm version ([b3dbf23](https://github.com/brocoders/nestjs-boilerplate/commit/b3dbf23a5bef9556f1a94ae0d2e0bd67eb5b7095))
-- prettier ([c520300](https://github.com/brocoders/nestjs-boilerplate/commit/c520300bcdcfb2fce715795216604a3cc2949699))
 - **readme:** command for testing ([c888ff3](https://github.com/brocoders/nestjs-boilerplate/commit/c888ff3078f9f0b484bf990a2bfc7e17559745b1))
 - **readme:** typo ([6bb9e2f](https://github.com/brocoders/nestjs-boilerplate/commit/6bb9e2f9e7f934dfa921bd96e9affda287806aa2))
 - sh file in docker ([1bf7b33](https://github.com/brocoders/nestjs-boilerplate/commit/1bf7b338dc5a53c404e117fa1fc61a0bdb2c95a1))
