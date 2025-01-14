@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { VendorSchemaClass, VendorStatusEnum } from './entities/vendor.schema';
+import { VendorSchemaClass, VendorStatusEnum } from './src/vendors/infrastructure/persistence/document/entities/vendor.schema';
 
 @Injectable()
 export class VendorSeedService {
