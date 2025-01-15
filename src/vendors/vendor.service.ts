@@ -88,12 +88,14 @@ export class VendorService {
     return this.transformVendorResponse(vendor);
   }
 
-  async update(id: string, updateVendorDto: UpdateVendorDto) {
+  async update(id: string, updateData: any) {
+    console.log('Updating vendor:', id, updateData); // Add logging
+
     const updatedVendor = await this.vendorModel.findByIdAndUpdate(
       id,
-      updateVendorDto,
+      { $set: updateData },
       { new: true, runValidators: true }
-    );
+    ).exec();
 
     if (!updatedVendor) {
       throw new NotFoundException(`Vendor with ID ${id} not found`);

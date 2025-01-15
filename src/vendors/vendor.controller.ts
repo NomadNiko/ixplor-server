@@ -20,7 +20,7 @@ import { RolesGuard } from '../roles/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { RoleEnum } from '../roles/roles.enum';
 
-
+  
 @ApiTags('Vendors')
 @Controller('vendors')
 export class VendorController {
@@ -84,7 +84,8 @@ export class VendorController {
   }
 
   @Put(':id')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(RoleEnum.admin)
   @ApiOperation({ summary: 'Update a vendor' })
   @ApiResponse({
     status: 200,
@@ -92,11 +93,13 @@ export class VendorController {
   })
   async update(
     @Param('id') id: string,
-    @Body() updateVendorDto: UpdateVendorDto,
+    @Body() updateData: any // We'll define proper DTO later
   ) {
-    return this.vendorService.update(id, updateVendorDto);
+    const updatedVendor = await this.vendorService.update(id, updateData);
+    return { data: updatedVendor };
   }
 
+  
   @Delete(':id')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Delete a vendor' })
