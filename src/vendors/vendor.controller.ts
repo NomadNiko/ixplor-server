@@ -16,6 +16,10 @@ import { ApiQuery, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
 import { AuthGuard } from '@nestjs/passport';
+import { RolesGuard } from '../roles/roles.guard';
+import { Roles } from '../roles/roles.decorator';
+import { RoleEnum } from '../roles/roles.enum';
+
 
 @ApiTags('Vendors')
 @Controller('vendors')
@@ -25,6 +29,13 @@ export class VendorController {
   @Get()
   async findAll() {
     return this.vendorService.findAllApproved();
+  }
+
+  @Get('admin/all')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(RoleEnum.admin)
+  async findAllVendors() {
+    return this.vendorService.findAllVendors();
   }
 
   @Get('nearby')

@@ -17,6 +17,16 @@ export class VendorService {
     private readonly vendorModel: Model<VendorSchemaDocument>
   ) {}
 
+  async findAllVendors() {
+    const vendors = await this.vendorModel.find()
+    .select('-__v')
+    .lean()
+    .exec();
+    return {
+      data: vendors.map(vendor => this.transformVendorResponse(vendor))
+    };
+  }
+
   async findAllApproved() {
     const vendors = await this.vendorModel.find({ 
       vendorStatus: VendorStatusEnum.APPROVED 
@@ -108,7 +118,7 @@ export class VendorService {
       website: vendor.website,
       email: vendor.email,
       phone: vendor.phone,
-      address: vendor.address,
+      address: vendor.address, 
       city: vendor.city,
       state: vendor.state,
       postalCode: vendor.postalCode,
