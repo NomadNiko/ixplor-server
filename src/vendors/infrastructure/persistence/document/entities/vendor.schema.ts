@@ -14,22 +14,16 @@ export enum VendorStatusEnum {
 
 export type VendorType = 'tours' | 'lessons' | 'rentals' | 'tickets';
 
-interface GeoPoint {
-  type: 'Point';
-  coordinates: [number, number]; // [longitude, latitude]
-}
-
 @Schema({
   timestamps: true,
   toJSON: {
     transform: (_, ret) => {
       ret._id = ret._id.toString();
-      if (ret.longitude !== undefined && ret.latitude !== undefined) {
-        ret.location = {
-          type: 'Point',
-          coordinates: [ret.longitude, ret.latitude]
-        };
-      }
+      // Ensure location object is properly formatted
+      ret.location = {
+        type: 'Point',
+        coordinates: [Number(ret.longitude), Number(ret.latitude)]
+      };
       delete ret.__v;
       return ret;
     },
@@ -72,54 +66,17 @@ export class VendorSchemaClass extends EntityDocumentHelper {
   @Prop({ required: true })
   postalCode: string;
 
-  @Prop({
-    type: {
-      type: String,
-      enum: ['Point'],
-      default: 'Point'
-    },
-    coordinates: {
-      type: [Number],
-      required: true
-    }
-  })
-  location: GeoPoint;
-
-  @Prop({
+  @Prop({ 
+    required: true, 
     type: Number,
-    required: true,
-    set: function(this: VendorSchemaClass, longitude: number) {
-      if (this.latitude !== undefined) {
-        if (!this.location) {
-          this.location = {
-            type: 'Point',
-            coordinates: [longitude, this.latitude]
-          };
-        } else {
-          this.location.coordinates[0] = longitude;
-        }
-      }
-      return longitude;
-    }
+    set: (val: string | number) => Number(val)
   })
   longitude: number;
 
-  @Prop({
+  @Prop({ 
+    required: true, 
     type: Number,
-    required: true,
-    set: function(this: VendorSchemaClass, latitude: number) {
-      if (this.longitude !== undefined) {
-        if (!this.location) {
-          this.location = {
-            type: 'Point',
-            coordinates: [this.longitude, latitude]
-          };
-        } else {
-          this.location.coordinates[1] = latitude;
-        }
-      }
-      return latitude;
-    }
+    set: (val: string | number) => Number(val)
   })
   latitude: number;
 
@@ -143,33 +100,18 @@ export class VendorSchemaClass extends EntityDocumentHelper {
 
 export const VendorSchema = SchemaFactory.createForClass(VendorSchemaClass);
 
-// Add indexes for better query performance
-VendorSchema.index({ location: '2dsphere' });
+// Add a pre-save middleware to ensure the location object is properly set
+VendorSchema.pre('save', function(next) {
+  if (this.latitude !== undefined && this.longitude !== undefined) {
+    // No need to explicitly set location as it's handled in the transform
+    next();
+  } else {
+    next(new Error('Latitude and longitude are required'));
+  }
+});
+
+// Create indexes
+VendorSchema.index({ latitude: 1, longitude: 1 });
 VendorSchema.index({ vendorStatus: 1 });
 VendorSchema.index({ vendorType: 1 });
 VendorSchema.index({ businessName: 'text', description: 'text' });
-
-// Add instance methods if needed
-VendorSchema.methods.toJSON = function() {
-  const obj = this.toObject();
-  obj._id = obj._id.toString();
-  if (obj.longitude !== undefined && obj.latitude !== undefined) {
-    obj.location = {
-      type: 'Point',
-      coordinates: [obj.longitude, obj.latitude]
-    };
-  }
-  delete obj.__v;
-  return obj;
-};
-
-// Add pre-save middleware to ensure location is always set
-VendorSchema.pre('save', function(next) {
-  if (this.longitude !== undefined && this.latitude !== undefined) {
-    this.location = {
-      type: 'Point',
-      coordinates: [this.longitude, this.latitude]
-    };
-  }
-  next();
-});
