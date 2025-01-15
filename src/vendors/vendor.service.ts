@@ -1,24 +1,20 @@
-// src/vendors/vendor.service.ts
-
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Document } from 'mongoose';
 import { 
   VendorSchemaClass, 
   VendorStatusEnum,
-  VendorType
+  VendorType,
+  VendorSchemaDocument
 } from './infrastructure/persistence/document/entities/vendor.schema';
-
-interface VendorDocument extends VendorSchemaClass {
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { CreateVendorDto } from './dto/create-vendor.dto';
+import { UpdateVendorDto } from './dto/update-vendor.dto';
 
 @Injectable()
 export class VendorService {
   constructor(
     @InjectModel(VendorSchemaClass.name)
-    private readonly vendorModel: Model<VendorSchemaClass>
+    private readonly vendorModel: Model<VendorSchemaDocument>
   ) {}
 
   async findAllApproved() {
@@ -26,32 +22,11 @@ export class VendorService {
       vendorStatus: VendorStatusEnum.APPROVED 
     })
     .select('-__v')
-    .lean<VendorDocument[]>()
+    .lean()
     .exec();
 
     return {
-      data: vendors.map(vendor => ({
-        _id: vendor._id.toString(),
-        businessName: vendor.businessName,
-        description: vendor.description,
-        vendorType: vendor.vendorType,
-        website: vendor.website,
-        email: vendor.email,
-        phone: vendor.phone,
-        address: vendor.address,
-        city: vendor.city,
-        state: vendor.state,
-        postalCode: vendor.postalCode,
-        location: {
-          type: 'Point' as const,
-          coordinates: [vendor.longitude, vendor.latitude] as [number, number]
-        },
-        logoUrl: vendor.logoUrl,
-        vendorStatus: vendor.vendorStatus,
-        adminNotes: vendor.adminNotes,
-        createdAt: vendor.createdAt.toISOString(),
-        updatedAt: vendor.updatedAt.toISOString()
-      }))
+      data: vendors.map(vendor => this.transformVendorResponse(vendor))
     };
   }
 
@@ -71,32 +46,11 @@ export class VendorService {
       }
     })
     .select('-__v')
-    .lean<VendorDocument[]>()
+    .lean()
     .exec();
 
     return {
-      data: vendors.map(vendor => ({
-        _id: vendor._id.toString(),
-        businessName: vendor.businessName,
-        description: vendor.description,
-        vendorType: vendor.vendorType,
-        website: vendor.website,
-        email: vendor.email,
-        phone: vendor.phone,
-        address: vendor.address,
-        city: vendor.city,
-        state: vendor.state,
-        postalCode: vendor.postalCode,
-        location: {
-          type: 'Point' as const,
-          coordinates: [vendor.longitude, vendor.latitude] as [number, number]
-        },
-        logoUrl: vendor.logoUrl,
-        vendorStatus: vendor.vendorStatus,
-        adminNotes: vendor.adminNotes,
-        createdAt: vendor.createdAt.toISOString(),
-        updatedAt: vendor.updatedAt.toISOString()
-      }))
+      data: vendors.map(vendor => this.transformVendorResponse(vendor))
     };
   }
 
@@ -106,32 +60,68 @@ export class VendorService {
       vendorType: type
     })
     .select('-__v')
-    .lean<VendorDocument[]>()
+    .lean()
     .exec();
 
     return {
-      data: vendors.map(vendor => ({
-        _id: vendor._id.toString(),
-        businessName: vendor.businessName,
-        description: vendor.description,
-        vendorType: vendor.vendorType,
-        website: vendor.website,
-        email: vendor.email,
-        phone: vendor.phone,
-        address: vendor.address,
-        city: vendor.city,
-        state: vendor.state,
-        postalCode: vendor.postalCode,
-        location: {
-          type: 'Point' as const,
-          coordinates: [vendor.longitude, vendor.latitude] as [number, number]
-        },
-        logoUrl: vendor.logoUrl,
-        vendorStatus: vendor.vendorStatus,
-        adminNotes: vendor.adminNotes,
-        createdAt: vendor.createdAt.toISOString(),
-        updatedAt: vendor.updatedAt.toISOString()
-      }))
+      data: vendors.map(vendor => this.transformVendorResponse(vendor))
+    };
+  }
+
+  async create(createVendorDto: CreateVendorDto) {
+    const createdVendor = new this.vendorModel({
+      ...createVendorDto,
+      vendorStatus: VendorStatusEnum.SUBMITTED
+    });
+    
+    const vendor = await createdVendor.save();
+    return this.transformVendorResponse(vendor);
+  }
+
+  async update(id: string, updateVendorDto: UpdateVendorDto) {
+    const updatedVendor = await this.vendorModel.findByIdAndUpdate(
+      id,
+      updateVendorDto,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedVendor) {
+      throw new NotFoundException(`Vendor with ID ${id} not found`);
+    }
+
+    return this.transformVendorResponse(updatedVendor);
+  }
+
+  async remove(id: string) {
+    const vendor = await this.vendorModel.findByIdAndDelete(id);
+    if (!vendor) {
+      throw new NotFoundException(`Vendor with ID ${id} not found`);
+    }
+  }
+
+  private transformVendorResponse(vendor: Record<string, any>) {
+    return {
+      _id: vendor._id.toString(),
+      businessName: vendor.businessName,
+      description: vendor.description,
+      vendorType: vendor.vendorType,
+      website: vendor.website,
+      email: vendor.email,
+      phone: vendor.phone,
+      address: vendor.address,
+      city: vendor.city,
+      state: vendor.state,
+      postalCode: vendor.postalCode,
+      location: {
+        type: 'Point' as const,
+        coordinates: [vendor.longitude, vendor.latitude] as [number, number]
+      },
+      logoUrl: vendor.logoUrl,
+      vendorStatus: vendor.vendorStatus,
+      actionNeeded: vendor.actionNeeded,
+      adminNotes: vendor.adminNotes,
+      createdAt: vendor.createdAt?.toISOString(),
+      updatedAt: vendor.updatedAt?.toISOString()
     };
   }
 }
