@@ -153,19 +153,14 @@ import {
     }
   
     @Put(':id/status')
-    @ApiBearerAuth()
     @UseGuards(AuthGuard('jwt'), RolesGuard)
     @Roles(RoleEnum.admin)
     @ApiOperation({ summary: 'Update product status' })
-    @ApiQuery({
-      name: 'status',
-      enum: ProductStatusEnum,
-      required: true,
-    })
     async updateStatus(
       @Param('id') id: string,
       @Query('status') status: ProductStatusEnum,
     ) {
+      // Changed to pass the status directly in the request body
       return this.productService.updateStatus(id, status);
     }
   

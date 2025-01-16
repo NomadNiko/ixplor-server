@@ -1,11 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { 
-  ProductSchemaClass, 
+import {
+  ProductSchemaClass,
   ProductStatusEnum,
   ProductType,
-  ProductSchemaDocument
+  ProductSchemaDocument,
 } from './infrastructure/persistence/document/entities/product.schema';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -14,47 +18,50 @@ import { UpdateProductDto } from './dto/update-product.dto';
 export class ProductService {
   constructor(
     @InjectModel(ProductSchemaClass.name)
-    private readonly productModel: Model<ProductSchemaDocument>
+    private readonly productModel: Model<ProductSchemaDocument>,
   ) {}
 
   // Find all products (admin access)
   async findAllProducts() {
-    const products = await this.productModel.find()
+    const products = await this.productModel
+      .find()
       .select('-__v')
       .lean()
       .exec();
     return {
-      data: products.map(product => this.transformProductResponse(product))
+      data: products.map((product) => this.transformProductResponse(product)),
     };
   }
 
   // Find only published products (public access)
   async findAllPublished() {
-    const products = await this.productModel.find({ 
-      productStatus: ProductStatusEnum.PUBLISHED 
-    })
-    .select('-__v')
-    .lean()
-    .exec();
+    const products = await this.productModel
+      .find({
+        productStatus: ProductStatusEnum.PUBLISHED,
+      })
+      .select('-__v')
+      .lean()
+      .exec();
     return {
-      data: products.map(product => this.transformProductResponse(product))
+      data: products.map((product) => this.transformProductResponse(product)),
     };
   }
 
   // Find products by price range
   async findByPriceRange(minPrice: number, maxPrice: number) {
-    const products = await this.productModel.find({
-      productStatus: ProductStatusEnum.PUBLISHED,
-      productPrice: { 
-        $gte: minPrice, 
-        $lte: maxPrice 
-      }
-    })
-    .select('-__v')
-    .lean()
-    .exec();
+    const products = await this.productModel
+      .find({
+        productStatus: ProductStatusEnum.PUBLISHED,
+        productPrice: {
+          $gte: minPrice,
+          $lte: maxPrice,
+        },
+      })
+      .select('-__v')
+      .lean()
+      .exec();
     return {
-      data: products.map(product => this.transformProductResponse(product))
+      data: products.map((product) => this.transformProductResponse(product)),
     };
   }
 
@@ -65,24 +72,25 @@ export class ProductService {
     }
 
     const radiusInMeters = radius * 1609.34; // Convert miles to meters
-    
-    const products = await this.productModel.find({
-      productStatus: ProductStatusEnum.PUBLISHED,
-      location: {
-        $near: {
-          $geometry: {
-            type: "Point",
-            coordinates: [lng, lat]
+
+    const products = await this.productModel
+      .find({
+        productStatus: ProductStatusEnum.PUBLISHED,
+        location: {
+          $near: {
+            $geometry: {
+              type: 'Point',
+              coordinates: [lng, lat],
+            },
+            $maxDistance: radiusInMeters,
           },
-          $maxDistance: radiusInMeters
-        }
-      }
-    })
-    .select('-__v')
-    .lean()
-    .exec();
+        },
+      })
+      .select('-__v')
+      .lean()
+      .exec();
     return {
-      data: products.map(product => this.transformProductResponse(product))
+      data: products.map((product) => this.transformProductResponse(product)),
     };
   }
 
@@ -92,15 +100,16 @@ export class ProductService {
       throw new BadRequestException('Product type is required');
     }
 
-    const products = await this.productModel.find({
-      productStatus: ProductStatusEnum.PUBLISHED,
-      productType: type
-    })
-    .select('-__v')
-    .lean()
-    .exec();
+    const products = await this.productModel
+      .find({
+        productStatus: ProductStatusEnum.PUBLISHED,
+        productType: type,
+      })
+      .select('-__v')
+      .lean()
+      .exec();
     return {
-      data: products.map(product => this.transformProductResponse(product))
+      data: products.map((product) => this.transformProductResponse(product)),
     };
   }
 
@@ -110,20 +119,22 @@ export class ProductService {
       throw new BadRequestException('Vendor ID is required');
     }
 
-    const products = await this.productModel.find({
-      vendorId: vendorId
-    })
-    .select('-__v')
-    .lean()
-    .exec();
+    const products = await this.productModel
+      .find({
+        vendorId: vendorId,
+      })
+      .select('-__v')
+      .lean()
+      .exec();
     return {
-      data: products.map(product => this.transformProductResponse(product))
+      data: products.map((product) => this.transformProductResponse(product)),
     };
   }
 
   // Find a single product by ID
   async findById(id: string) {
-    const product = await this.productModel.findById(id)
+    const product = await this.productModel
+      .findById(id)
       .select('-__v')
       .lean()
       .exec();
@@ -133,21 +144,22 @@ export class ProductService {
     }
 
     return {
-      data: this.transformProductResponse(product)
+      data: this.transformProductResponse(product),
     };
   }
 
   // Search products by name or description
   async searchProducts(searchTerm: string) {
-    const products = await this.productModel.find({
-      productStatus: ProductStatusEnum.PUBLISHED,
-      $text: { $search: searchTerm }
-    })
-    .select('-__v')
-    .lean()
-    .exec();
+    const products = await this.productModel
+      .find({
+        productStatus: ProductStatusEnum.PUBLISHED,
+        $text: { $search: searchTerm },
+      })
+      .select('-__v')
+      .lean()
+      .exec();
     return {
-      data: products.map(product => this.transformProductResponse(product))
+      data: products.map((product) => this.transformProductResponse(product)),
     };
   }
 
@@ -156,13 +168,13 @@ export class ProductService {
     try {
       const createdProduct = new this.productModel({
         ...createProductDto,
-        productStatus: ProductStatusEnum.DRAFT
+        productStatus: ProductStatusEnum.DRAFT,
       });
-      
+
       const product = await createdProduct.save();
       return {
         data: this.transformProductResponse(product),
-        message: 'Product created successfully'
+        message: 'Product created successfully',
       };
     } catch (error) {
       if (error.name === 'ValidationError') {
@@ -175,11 +187,13 @@ export class ProductService {
   // Update an existing product
   async update(id: string, updateProductDto: UpdateProductDto) {
     try {
-      const updatedProduct = await this.productModel.findByIdAndUpdate(
-        id,
-        { $set: updateProductDto },
-        { new: true, runValidators: true }
-      ).exec();
+      const updatedProduct = await this.productModel
+        .findByIdAndUpdate(
+          id,
+          { $set: updateProductDto },
+          { new: true, runValidators: true },
+        )
+        .exec();
 
       if (!updatedProduct) {
         throw new NotFoundException(`Product with ID ${id} not found`);
@@ -187,7 +201,7 @@ export class ProductService {
 
       return {
         data: this.transformProductResponse(updatedProduct),
-        message: 'Product updated successfully'
+        message: 'Product updated successfully',
       };
     } catch (error) {
       if (error.name === 'ValidationError') {
@@ -199,11 +213,21 @@ export class ProductService {
 
   // Update product status
   async updateStatus(id: string, status: ProductStatusEnum) {
-    const product = await this.productModel.findByIdAndUpdate(
-      id,
-      { $set: { productStatus: status } },
-      { new: true, runValidators: true }
-    ).exec();
+    const product = await this.productModel
+      .findByIdAndUpdate(
+        id,
+        {
+          $set: {
+            productStatus: status,
+            updatedAt: new Date(), // Ensure updatedAt is refreshed
+          },
+        },
+        {
+          new: true, // Return the updated document
+          runValidators: true,
+        },
+      )
+      .exec();
 
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
@@ -211,10 +235,10 @@ export class ProductService {
 
     return {
       data: this.transformProductResponse(product),
-      message: 'Product status updated successfully'
+      message: 'Product status updated successfully',
     };
   }
-
+  
   // Delete a product
   async remove(id: string) {
     const product = await this.productModel.findByIdAndDelete(id);
@@ -222,7 +246,7 @@ export class ProductService {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
     return {
-      message: 'Product deleted successfully'
+      message: 'Product deleted successfully',
     };
   }
 
@@ -236,7 +260,7 @@ export class ProductService {
       productType: product.productType,
       location: {
         type: 'Point' as const,
-        coordinates: [product.longitude, product.latitude] as [number, number]
+        coordinates: [product.longitude, product.latitude] as [number, number],
       },
       vendorId: product.vendorId,
       productImageURL: product.productImageURL,
@@ -249,7 +273,7 @@ export class ProductService {
       productWaiver: product.productWaiver,
       productStatus: product.productStatus,
       createdAt: product.createdAt?.toISOString(),
-      updatedAt: product.updatedAt?.toISOString()
+      updatedAt: product.updatedAt?.toISOString(),
     };
   }
 }
