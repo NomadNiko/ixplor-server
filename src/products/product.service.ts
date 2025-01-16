@@ -213,32 +213,19 @@ export class ProductService {
 
   // Update product status
   async updateStatus(id: string, status: ProductStatusEnum) {
-    const product = await this.productModel
-      .findByIdAndUpdate(
-        id,
-        {
-          $set: {
-            productStatus: status,
-            updatedAt: new Date(), // Ensure updatedAt is refreshed
-          },
-        },
-        {
-          new: true, // Return the updated document
-          runValidators: true,
-        },
-      )
-      .exec();
-
+    const product = await this.productModel.findById(id).exec();
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
-
+    product.productStatus = status;
+    product.updatedAt = new Date();
+    await product.save();
     return {
       data: this.transformProductResponse(product),
       message: 'Product status updated successfully',
     };
   }
-  
+
   // Delete a product
   async remove(id: string) {
     const product = await this.productModel.findByIdAndDelete(id);

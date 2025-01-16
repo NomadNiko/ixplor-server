@@ -1,12 +1,12 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, now } from 'mongoose';
 import { EntityDocumentHelper } from '../../../../../utils/document-entity-helper';
 
 export type ProductSchemaDocument = HydratedDocument<ProductSchemaClass>;
 
 export enum ProductStatusEnum {
   DRAFT = 'DRAFT',
-  PUBLISHED = 'PUBLISHED',
+  PUBLISHED = 'PUBLISHED', 
   ARCHIVED = 'ARCHIVED'
 }
 
@@ -100,6 +100,12 @@ export class ProductSchemaClass extends EntityDocumentHelper {
   // Reference to vendor
   @Prop({ type: String, required: true })
   vendorId: string;
+
+  @Prop({ default: now })
+  createdAt: Date;
+
+  @Prop({ default: now })
+  updatedAt: Date;
 }
 
 export const ProductSchema = SchemaFactory.createForClass(ProductSchemaClass);
