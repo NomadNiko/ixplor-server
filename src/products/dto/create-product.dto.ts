@@ -67,11 +67,6 @@ export class CreateProductDto {
   @Matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
   productStartTime?: string;
 
-  @ApiPropertyOptional({ example: '11:30' })
-  @IsOptional()
-  @Matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-  productEndTime?: string;
-
   @ApiPropertyOptional({ example: 'Please arrive 15 minutes early' })
   @IsOptional()
   @IsString()

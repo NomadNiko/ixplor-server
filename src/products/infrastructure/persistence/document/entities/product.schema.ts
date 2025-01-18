@@ -78,9 +78,6 @@ export class ProductSchemaClass extends EntityDocumentHelper {
   productStartTime?: string;
 
   @Prop({ type: String })
-  productEndTime?: string;
-
-  @Prop({ type: String })
   productAdditionalInfo?: string;
 
   @Prop({ type: [String] })

@@ -254,7 +254,6 @@ export class ProductService {
       productDuration: product.productDuration,
       productDate: product.productDate,
       productStartTime: product.productStartTime,
-      productEndTime: product.productEndTime,
       productAdditionalInfo: product.productAdditionalInfo,
       productRequirements: product.productRequirements,
       productWaiver: product.productWaiver,
