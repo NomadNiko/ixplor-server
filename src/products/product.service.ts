@@ -13,15 +13,16 @@ import {
 } from './infrastructure/persistence/document/entities/product.schema';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { VendorService } from '../vendors/vendor.service';
 
 @Injectable()
 export class ProductService {
   constructor(
     @InjectModel(ProductSchemaClass.name)
     private readonly productModel: Model<ProductSchemaDocument>,
+    private readonly vendorService: VendorService
   ) {}
 
-  // Find all products (admin access)
   async findAllProducts() {
     const products = await this.productModel
       .find()
@@ -33,7 +34,6 @@ export class ProductService {
     };
   }
 
-  // Find only published products (public access)
   async findAllPublished() {
     const products = await this.productModel
       .find({
@@ -47,7 +47,6 @@ export class ProductService {
     };
   }
 
-  // Find products by price range
   async findByPriceRange(minPrice: number, maxPrice: number) {
     const products = await this.productModel
       .find({
@@ -65,14 +64,11 @@ export class ProductService {
     };
   }
 
-  // Find products near a location
   async findNearby(lat: number, lng: number, radius: number = 10) {
     if (!lat || !lng) {
       throw new BadRequestException('Latitude and longitude are required');
     }
-
     const radiusInMeters = radius * 1609.34; // Convert miles to meters
-
     const products = await this.productModel
       .find({
         productStatus: ProductStatusEnum.PUBLISHED,
@@ -94,12 +90,10 @@ export class ProductService {
     };
   }
 
-  // Find products by type (tours, lessons, etc.)
   async findByType(type: ProductType) {
     if (!type) {
       throw new BadRequestException('Product type is required');
     }
-
     const products = await this.productModel
       .find({
         productStatus: ProductStatusEnum.PUBLISHED,
@@ -113,12 +107,10 @@ export class ProductService {
     };
   }
 
-  // Find products by vendor
   async findByVendor(vendorId: string) {
     if (!vendorId) {
       throw new BadRequestException('Vendor ID is required');
     }
-
     const products = await this.productModel
       .find({
         vendorId: vendorId,
@@ -131,24 +123,20 @@ export class ProductService {
     };
   }
 
-  // Find a single product by ID
   async findById(id: string) {
     const product = await this.productModel
       .findById(id)
       .select('-__v')
       .lean()
       .exec();
-
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
-
     return {
       data: this.transformProductResponse(product),
     };
   }
 
-  // Search products by name or description
   async searchProducts(searchTerm: string) {
     const products = await this.productModel
       .find({
@@ -163,15 +151,20 @@ export class ProductService {
     };
   }
 
-  // Create a new product
   async create(createProductDto: CreateProductDto) {
     try {
       const createdProduct = new this.productModel({
         ...createProductDto,
         productStatus: ProductStatusEnum.DRAFT,
       });
-
+      
       const product = await createdProduct.save();
+      
+      // Update vendor types after creating product
+      if (product.vendorId) {
+        await this.updateVendorTypes(product.vendorId);
+      }
+      
       return {
         data: this.transformProductResponse(product),
         message: 'Product created successfully',
@@ -184,21 +177,25 @@ export class ProductService {
     }
   }
 
-  // Update an existing product
   async update(id: string, updateProductDto: UpdateProductDto) {
     try {
       const updatedProduct = await this.productModel
         .findByIdAndUpdate(
           id,
           { $set: updateProductDto },
-          { new: true, runValidators: true },
+          { new: true, runValidators: true }
         )
         .exec();
-
+      
       if (!updatedProduct) {
         throw new NotFoundException(`Product with ID ${id} not found`);
       }
-
+      
+      // Update vendor types after updating product
+      if (updatedProduct.vendorId) {
+        await this.updateVendorTypes(updatedProduct.vendorId);
+      }
+      
       return {
         data: this.transformProductResponse(updatedProduct),
         message: 'Product updated successfully',
@@ -211,33 +208,75 @@ export class ProductService {
     }
   }
 
-  // Update product status
   async updateStatus(id: string, status: ProductStatusEnum) {
     const product = await this.productModel.findById(id).exec();
+    
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
+    
     product.productStatus = status;
     product.updatedAt = new Date();
+    
     await product.save();
+    
+    // Update vendor types after status change
+    if (product.vendorId) {
+      await this.updateVendorTypes(product.vendorId);
+    }
+    
     return {
       data: this.transformProductResponse(product),
       message: 'Product status updated successfully',
     };
   }
 
-  // Delete a product
   async remove(id: string) {
-    const product = await this.productModel.findByIdAndDelete(id);
+    const product = await this.productModel.findById(id);
+    
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
+    
+    const vendorId = product.vendorId;
+    await this.productModel.findByIdAndDelete(id);
+    
+    // Update vendor types after deleting product
+    if (vendorId) {
+      await this.updateVendorTypes(vendorId);
+    }
+    
     return {
       message: 'Product deleted successfully',
     };
   }
 
-  // Transform product data for response
+  // Custom method to update vendor types
+  private async updateVendorTypes(vendorId: string) {
+    try {
+      // Find all published products for this vendor
+      const publishedProducts = await this.productModel.find({
+        vendorId: vendorId,
+        productStatus: ProductStatusEnum.PUBLISHED
+      });
+  
+      // If no published products, we'll use the most recent products
+      const productsToCheck = publishedProducts.length > 0 
+        ? publishedProducts 
+        : await this.productModel.find({ vendorId: vendorId });
+  
+      // Extract unique product types
+      const vendorTypes: ProductType[] = Array.from(
+        new Set(productsToCheck.map(product => product.productType))
+      );
+  
+      // Call vendor service to update types
+      await this.vendorService.updateVendorTypes(vendorId, vendorTypes);
+    } catch (error) {
+      console.error(`Error updating vendor types for vendor ${vendorId}:`, error);
+    }
+  }
+
   private transformProductResponse(product: Record<string, any>) {
     return {
       _id: product._id.toString(),

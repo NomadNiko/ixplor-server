@@ -1,5 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsEnum, IsNumber, IsOptional, IsEmail, IsUrl, IsLatitude, IsLongitude } from 'class-validator';
+import { 
+  IsString, 
+  IsArray,
+  IsEnum, 
+  IsOptional, 
+  IsEmail, 
+  IsUrl, 
+  IsLatitude, 
+  IsLongitude 
+} from 'class-validator';
 import { VendorType } from '../infrastructure/persistence/document/entities/vendor.schema';
 
 export class CreateVendorDto {
@@ -11,9 +20,14 @@ export class CreateVendorDto {
   @IsString()
   description: string;
 
-  @ApiProperty({ enum: ['tours', 'lessons', 'rentals', 'tickets'] })
-  @IsEnum(['tours', 'lessons', 'rentals', 'tickets'])
-  vendorType: VendorType;
+  @ApiProperty({ 
+    enum: ['tours', 'lessons', 'rentals', 'tickets'],
+    isArray: true,
+    example: ['tours', 'lessons']
+  })
+  @IsArray()
+  @IsEnum(['tours', 'lessons', 'rentals', 'tickets'], { each: true })
+  vendorTypes: VendorType[];
 
   @ApiPropertyOptional({ example: 'https://www.beachadventures.com' })
   @IsOptional()
