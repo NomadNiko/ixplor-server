@@ -10,12 +10,15 @@ import {
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
 import { ProductType } from 'src/products/infrastructure/persistence/document/entities/product.schema';
+import { UserSchemaClass } from '../users/infrastructure/persistence/document/entities/user.schema';
 
 @Injectable()
 export class VendorService {
   constructor(
     @InjectModel(VendorSchemaClass.name)
-    private readonly vendorModel: Model<VendorSchemaDocument>
+    private readonly vendorModel: Model<VendorSchemaDocument>,
+    @InjectModel(UserSchemaClass.name)
+    private readonly userModel: Model<UserSchemaClass>
   ) {}
 
   async findAllVendors() {
@@ -76,13 +79,25 @@ export class VendorService {
     };
   }
 
-  async create(createVendorDto: CreateVendorDto) {
+  async create(createVendorDto: CreateVendorDto, userId: string) {
     const createdVendor = new this.vendorModel({
       ...createVendorDto,
-      vendorStatus: VendorStatusEnum.SUBMITTED
+      vendorStatus: VendorStatusEnum.SUBMITTED,
+      ownerIds: [userId]
     });
     
     const vendor = await createdVendor.save();
+
+     // Update the user's vendorProfileIds
+     await this.userModel.findByIdAndUpdate(
+      userId,
+      { 
+        $addToSet: { vendorProfileIds: vendor._id } 
+      },
+      { new: true }
+    );
+
+
     return {
       data: this.transformVendorResponse(vendor),
       message: 'Vendor created successfully'

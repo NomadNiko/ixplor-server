@@ -1,3 +1,5 @@
+// ./src/vendors/vendor.module.ts
+
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { VendorController } from './vendor.controller';
@@ -6,6 +8,10 @@ import {
   VendorSchemaClass,
   VendorSchema,
 } from './infrastructure/persistence/document/entities/vendor.schema';
+import {
+  UserSchemaClass,
+  UserSchema,
+} from '../users/infrastructure/persistence/document/entities/user.schema';
 
 @Module({
   imports: [
@@ -14,6 +20,10 @@ import {
         name: VendorSchemaClass.name,
         schema: VendorSchema,
       },
+      {
+        name: UserSchemaClass.name,
+        schema: UserSchema,
+      }
     ]),
   ],
   controllers: [VendorController],

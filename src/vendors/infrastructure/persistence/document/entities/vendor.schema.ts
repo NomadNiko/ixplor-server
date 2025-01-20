@@ -79,6 +79,12 @@ export class VendorSchemaClass {
   @Prop()
   adminNotes?: string;
 
+  @Prop({ 
+    type: [String],
+    default: [] 
+  })
+  ownerIds: string[];
+
   @Prop({ default: now })
   createdAt: Date;
 

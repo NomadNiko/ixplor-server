@@ -9,6 +9,7 @@ import {
   Query,
   BadRequestException,
   UseGuards,
+  Request
 } from '@nestjs/common';
 import { VendorService } from './vendor.service';
 import { VendorType } from './infrastructure/persistence/document/entities/vendor.schema';
@@ -79,9 +80,13 @@ export class VendorController {
     status: 201,
     description: 'The vendor has been successfully created.',
   })
-  async create(@Body() createVendorDto: CreateVendorDto) {
-    return this.vendorService.create(createVendorDto);
+  async create(
+    @Body() createVendorDto: CreateVendorDto,
+    @Request() req
+  ) {
+    return this.vendorService.create(createVendorDto, req.user.id);
   }
+
 
   @Put(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
