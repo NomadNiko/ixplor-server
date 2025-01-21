@@ -84,6 +84,25 @@ export class VendorController {
     return this.vendorService.create(createVendorDto, req.user.id);
   }
 
+  @Post('admin/approve/:vendorId/:userId')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(RoleEnum.admin)
+  @ApiOperation({ summary: 'Approve a vendor and update user role (Admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'The vendor has been approved and user role updated if needed',
+  })
+  async approveVendor(
+    @Param('vendorId') vendorId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.vendorService.approveVendor(vendorId, userId);
+  }
+
+  @Get('admin/user/:userId/vendors')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(RoleEnum.admin)
+
   @Put(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.admin)
