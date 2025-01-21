@@ -1,6 +1,7 @@
 import {
   HttpStatus,
   Injectable,
+  InternalServerErrorException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -18,12 +19,14 @@ import { FileType } from '../files/domain/file';
 import { Role } from '../roles/domain/role';
 import { Status } from '../statuses/domain/status';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { VendorService } from '../vendors/vendor.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly usersRepository: UserRepository,
     private readonly filesService: FilesService,
+    private readonly vendorService: VendorService,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -283,6 +286,15 @@ export class UsersService {
   }
 
   async remove(id: User['id']): Promise<void> {
-    await this.usersRepository.remove(id);
+    try {
+      // First remove the user from any vendors they own
+      await this.vendorService.removeUserFromVendors(id.toString());
+      
+      // Then remove the user
+      await this.usersRepository.remove(id);
+    } catch (error) {
+      console.error('Error removing user:', error);
+      throw new InternalServerErrorException('Failed to remove user and associated data');
+    }
   }
 }

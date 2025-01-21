@@ -9,7 +9,8 @@ import {
   Query,
   BadRequestException,
   UseGuards,
-  Request
+  Request,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { VendorService } from './vendor.service';
 import { VendorType } from './infrastructure/persistence/document/entities/vendor.schema';
@@ -21,7 +22,6 @@ import { RolesGuard } from '../roles/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { RoleEnum } from '../roles/roles.enum';
 
-  
 @ApiTags('Vendors')
 @Controller('vendors')
 export class VendorController {
@@ -80,13 +80,9 @@ export class VendorController {
     status: 201,
     description: 'The vendor has been successfully created.',
   })
-  async create(
-    @Body() createVendorDto: CreateVendorDto,
-    @Request() req
-  ) {
+  async create(@Body() createVendorDto: CreateVendorDto, @Request() req) {
     return this.vendorService.create(createVendorDto, req.user.id);
   }
-
 
   @Put(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -98,13 +94,12 @@ export class VendorController {
   })
   async update(
     @Param('id') id: string,
-    @Body() updateData: any // We'll define proper DTO later
+    @Body() updateData: any, // We'll define proper DTO later
   ) {
     const updatedVendor = await this.vendorService.update(id, updateData);
     return { data: updatedVendor };
   }
 
-  
   @Delete(':id')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Delete a vendor' })
@@ -114,5 +109,38 @@ export class VendorController {
   })
   async remove(@Param('id') id: string) {
     return this.vendorService.remove(id);
+  }
+
+  @Get('admin/user/:userId/vendors')
+@UseGuards(AuthGuard('jwt'), RolesGuard)
+@Roles(RoleEnum.admin)
+@ApiOperation({ summary: 'Get all vendors owned by user (Admin only)' })
+@ApiResponse({
+  status: 200,
+  description: 'Returns all vendors owned by the specified user, including pending and non-approved vendors',
+})
+async findAllVendorsForUser(
+  @Param('userId') userId: string,
+) {
+  return this.vendorService.findAllVendorsForUser(userId);
+}
+
+
+  @Get('user/:userId/owned')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get vendors owned by user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all vendors owned by the specified user',
+  })
+  async findVendorsOwnedByUser(
+    @Param('userId') userId: string,
+    @Request() req,
+  ) {
+    // Verify the requesting user matches the userId parameter
+    if (req.user.id !== userId) {
+      throw new UnauthorizedException("Cannot access other users' vendor data");
+    }
+    return this.vendorService.findVendorsOwnedByUser(userId);
   }
 }

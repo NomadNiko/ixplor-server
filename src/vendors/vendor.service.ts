@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { 
@@ -11,6 +11,7 @@ import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
 import { ProductType } from 'src/products/infrastructure/persistence/document/entities/product.schema';
 import { UserSchemaClass } from '../users/infrastructure/persistence/document/entities/user.schema';
+import { RoleEnum } from 'src/roles/roles.enum';
 
 @Injectable()
 export class VendorService {
@@ -29,6 +30,67 @@ export class VendorService {
     return {
       data: vendors.map(vendor => this.transformVendorResponse(vendor))
     };
+  }
+// restricted to user 
+  async findVendorsOwnedByUser(userId: string) {
+    try {
+      // Find user first to verify they exist
+      const user = await this.userModel.findById(userId);
+      if (!user) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+  
+      // Get vendors where user is in ownerIds array
+      const vendors = await this.vendorModel.find({
+        ownerIds: userId,
+        vendorStatus: VendorStatusEnum.APPROVED // Only return approved vendors
+      })
+        .select('-__v -ownerIds -adminNotes') // Exclude sensitive fields
+        .lean()
+        .exec();
+  
+      return {
+        data: vendors.map(vendor => this.transformVendorResponse(vendor))
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('Error finding vendors for user:', error);
+      throw new InternalServerErrorException('Failed to fetch user vendors');
+    }
+  }
+// for admins
+  async findAllVendorsForUser(userId: string) {
+    try {
+      // Find user first to verify they exist
+      const user = await this.userModel.findById(userId);
+      if (!user) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+  
+      // Get all vendors where user is in ownerIds array, regardless of status
+      const vendors = await this.vendorModel.find({
+        ownerIds: userId
+      })
+        .select('-__v') // We keep more fields for admin view
+        .lean()
+        .exec();
+  
+      return {
+        data: vendors.map(vendor => ({
+          ...this.transformVendorResponse(vendor),
+          ownerIds: vendor.ownerIds, // Include ownership data for admin view
+          adminNotes: vendor.adminNotes
+        }))
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('Error finding vendors for user (admin):', error);
+      throw new InternalServerErrorException('Failed to fetch user vendors');
+    }
   }
 
   async findAllApproved() {
@@ -104,12 +166,45 @@ export class VendorService {
     };
   }
 
+
+  private async updateOwnerRoles(ownerIds: string[]) {
+    try {
+      // Update all owners who are currently "user" role to "vendor" role
+      await this.userModel.updateMany(
+        { 
+          _id: { $in: ownerIds },
+          'role._id': RoleEnum.user // Only update if they are currently a user
+        },
+        { 
+          $set: { 
+            'role._id': RoleEnum.vendor 
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Error updating owner roles:', error);
+      throw new InternalServerErrorException('Failed to update owner roles');
+    }
+  }
+
+  
   async update(id: string, updateData: UpdateVendorDto) {
+    const vendor = await this.vendorModel.findById(id);
+    if (!vendor) {
+      throw new NotFoundException(`Vendor with ID ${id} not found`);
+    }
+
+    // If status is being changed to APPROVED, update owner roles
+    if (updateData.vendorStatus === VendorStatusEnum.APPROVED && 
+        vendor.vendorStatus !== VendorStatusEnum.APPROVED) {
+      await this.updateOwnerRoles(vendor.ownerIds);
+    }
+
     const updatedVendor = await this.vendorModel.findByIdAndUpdate(
       id,
       { $set: updateData },
       { new: true, runValidators: true }
-    ).exec();
+    ).lean().exec();
 
     if (!updatedVendor) {
       throw new NotFoundException(`Vendor with ID ${id} not found`);
@@ -122,13 +217,61 @@ export class VendorService {
   }
 
   async remove(id: string) {
-    const vendor = await this.vendorModel.findByIdAndDelete(id);
+    const vendor = await this.vendorModel.findById(id);
     if (!vendor) {
       throw new NotFoundException(`Vendor with ID ${id} not found`);
     }
-    return {
-      message: 'Vendor deleted successfully'
-    };
+
+    try {
+      // Start a session for the transaction
+      const session = await this.vendorModel.db.startSession();
+      
+      await session.withTransaction(async () => {
+        // Delete all products associated with this vendor
+        const ProductModel = this.vendorModel.db.model('ProductSchemaClass');
+        await ProductModel.deleteMany({ vendorId: id }).session(session);
+
+        // Remove vendorProfileId from all associated users
+        await this.userModel.updateMany(
+          { vendorProfileIds: id },
+          { $pull: { vendorProfileIds: id } }
+        ).session(session);
+
+        // Delete the vendor
+        await this.vendorModel.findByIdAndDelete(id).session(session);
+      });
+
+      await session.endSession();
+
+      return {
+        message: 'Vendor and associated data deleted successfully'
+      };
+    } catch (error) {
+      console.error('Error during vendor deletion:', error);
+      throw new InternalServerErrorException('Failed to delete vendor and associated data');
+    }
+  }
+
+  async removeUserFromVendors(userId: string) {
+    try {
+      const vendors = await this.vendorModel.find({ ownerIds: userId });
+      
+      for (const vendor of vendors) {
+        // Remove the user from ownerIds
+        vendor.ownerIds = vendor.ownerIds.filter(id => id !== userId);
+        
+        if (vendor.ownerIds.length === 0) {
+          // If no owners left, delete the vendor and its products
+          await this.remove(vendor._id.toString());
+        } else {
+          // Otherwise just update the vendor
+          await vendor.save();
+        }
+      }
+    } catch (error) {
+      console.error('Error removing user from vendors:', error);
+      throw new InternalServerErrorException('Failed to remove user from vendors');
+    }
   }
 
   private async getProductTypes(vendorId: string): Promise<ProductType[]> {
