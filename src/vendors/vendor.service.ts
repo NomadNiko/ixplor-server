@@ -13,9 +13,9 @@ import {
 } from './infrastructure/persistence/document/entities/vendor.schema';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
-import { ProductType } from 'src/products/infrastructure/persistence/document/entities/product.schema';
+import { ProductType } from '../products/infrastructure/persistence/document/entities/product.schema';
 import { UserSchemaClass } from '../users/infrastructure/persistence/document/entities/user.schema';
-import { RoleEnum } from 'src/roles/roles.enum';
+import { RoleEnum } from '../roles/roles.enum';
 
 @Injectable()
 export class VendorService {
