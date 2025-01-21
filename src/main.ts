@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import {
-  ClassSerializerInterceptor,
   ValidationPipe,
   VersioningType,
 } from '@nestjs/common';
@@ -11,7 +10,7 @@ import { useContainer } from 'class-validator';
 import { AppModule } from './app.module';
 import validationOptions from './utils/validation-options';
 import { AllConfigType } from './config/config.type';
-import { ResolvePromisesInterceptor } from './utils/serializer.interceptor';
+//import { ResolvePromisesInterceptor } from './utils/serializer.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { cors: true });
@@ -32,8 +31,8 @@ async function bootstrap() {
   app.useGlobalInterceptors(
     // ResolvePromisesInterceptor is used to resolve promises in responses because class-transformer can't do it
     // https://github.com/typestack/class-transformer/issues/549
-    new ResolvePromisesInterceptor(),
-    new ClassSerializerInterceptor(app.get(Reflector)),
+    //new ResolvePromisesInterceptor(),
+    //new ClassSerializerInterceptor(app.get(Reflector)),
   );
 
   const options = new DocumentBuilder()

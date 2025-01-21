@@ -16,7 +16,6 @@ export class CartService {
   async getCart(userId: string) {
     const cart = await this.cartModel.findOne({ userId }).lean();
     if (!cart) {
-      // Return empty cart if none exists
       return {
         userId,
         items: [],
@@ -28,29 +27,28 @@ export class CartService {
 
   async addToCart(userId: string, addToCartDto: AddToCartDto) {
     const { productId, quantity, productDate, productStartTime } = addToCartDto;
-
-    // Verify product exists and get its details
+    
     const product = await this.productService.findById(productId);
-    if (!product) {
+    if (!product || !product.data) {
       throw new NotFoundException('Product not found');
     }
 
-    // Find or create cart
     let cart = await this.cartModel.findOne({ userId });
     if (!cart) {
-      cart = new this.cartModel({ userId, items: [], total: 0 });
+      cart = new this.cartModel({
+        userId,
+        items: [],
+        total: 0
+      });
     }
 
-    // Check if product already in cart
     const existingItemIndex = cart.items.findIndex(
       item => item.productId === productId
     );
 
     if (existingItemIndex > -1) {
-      // Update existing item
       cart.items[existingItemIndex].quantity += quantity;
     } else {
-      // Add new item
       cart.items.push({
         productId,
         quantity,
@@ -61,20 +59,14 @@ export class CartService {
       });
     }
 
-    // Recalculate total
-    cart.total = cart.items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
-
-    await cart.save();
-    return cart;
+    // Let the pre-save middleware handle total calculation
+    return await cart.save();
   }
 
   async updateCartItem(userId: string, updateCartItemDto: UpdateCartItemDto) {
     const { productId, quantity } = updateCartItemDto;
+    
     const cart = await this.cartModel.findOne({ userId });
-
     if (!cart) {
       throw new NotFoundException('Cart not found');
     }
@@ -85,21 +77,12 @@ export class CartService {
     }
 
     if (quantity === 0) {
-      // Remove item if quantity is 0
       cart.items.splice(itemIndex, 1);
     } else {
-      // Update quantity
       cart.items[itemIndex].quantity = quantity;
     }
 
-    // Recalculate total
-    cart.total = cart.items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
-
-    await cart.save();
-    return cart;
+    return await cart.save();
   }
 
   async removeFromCart(userId: string, productId: string) {
@@ -108,19 +91,8 @@ export class CartService {
       throw new NotFoundException('Cart not found');
     }
 
-    const itemIndex = cart.items.findIndex(item => item.productId === productId);
-    if (itemIndex === -1) {
-      throw new NotFoundException('Item not found in cart');
-    }
-
-    cart.items.splice(itemIndex, 1);
-    cart.total = cart.items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
-
-    await cart.save();
-    return cart;
+    cart.items = cart.items.filter(item => item.productId !== productId);
+    return await cart.save();
   }
 
   async clearCart(userId: string) {
@@ -130,8 +102,6 @@ export class CartService {
     }
 
     cart.items = [];
-    cart.total = 0;
-    await cart.save();
-    return cart;
+    return await cart.save();
   }
 }

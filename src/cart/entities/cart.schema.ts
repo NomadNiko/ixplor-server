@@ -48,6 +48,17 @@ export class CartClass {
 
 export const CartSchema = SchemaFactory.createForClass(CartClass);
 
-// Add indexes
+// Add proper indexes
 CartSchema.index({ userId: 1 });
 CartSchema.index({ 'items.productId': 1 });
+
+// Add pre-save middleware to calculate total
+CartSchema.pre('save', function(next) {
+  if (this.items) {
+    this.total = this.items.reduce(
+      (sum, item) => sum + (item.price * item.quantity),
+      0
+    );
+  }
+  next();
+});
