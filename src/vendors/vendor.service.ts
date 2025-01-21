@@ -96,6 +96,26 @@ export class VendorService {
     }
   }
 
+  async getVendorOwners(id: string) {
+    try {
+      const vendor = await this.vendorModel.findById(id)
+        .select('ownerIds')
+        .lean()
+        .exec();
+  
+      if (!vendor) {
+        throw new NotFoundException(`Vendor with ID ${id} not found`);
+      }
+  
+      return {
+        data: vendor.ownerIds
+      };
+    } catch (error) {
+      console.error('Error getting vendor owners:', error);
+      throw new InternalServerErrorException('Failed to get vendor owners');
+    }
+  }
+
   async findAllApproved() {
     const vendors = await this.vendorModel
       .find({

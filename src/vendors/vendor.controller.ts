@@ -39,6 +39,18 @@ export class VendorController {
     return this.vendorService.findAllVendors();
   }
 
+  @Get(':id/owners')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(RoleEnum.admin)
+  @ApiOperation({ summary: 'Get vendor owners' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns the owners of a vendor',
+  })
+  async getVendorOwners(@Param('id') id: string) {
+    return this.vendorService.getVendorOwners(id);
+  }
+
   @Get('nearby')
   @ApiQuery({ name: 'lat', type: Number, required: true })
   @ApiQuery({ name: 'lng', type: Number, required: true })
@@ -87,7 +99,9 @@ export class VendorController {
   @Post('admin/approve/:vendorId/:userId')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.admin)
-  @ApiOperation({ summary: 'Approve a vendor and update user role (Admin only)' })
+  @ApiOperation({
+    summary: 'Approve a vendor and update user role (Admin only)',
+  })
   @ApiResponse({
     status: 200,
     description: 'The vendor has been approved and user role updated if needed',
@@ -102,7 +116,6 @@ export class VendorController {
   @Get('admin/user/:userId/vendors')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.admin)
-
   @Put(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.admin)
@@ -131,19 +144,17 @@ export class VendorController {
   }
 
   @Get('admin/user/:userId/vendors')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
-@Roles(RoleEnum.admin)
-@ApiOperation({ summary: 'Get all vendors owned by user (Admin only)' })
-@ApiResponse({
-  status: 200,
-  description: 'Returns all vendors owned by the specified user, including pending and non-approved vendors',
-})
-async findAllVendorsForUser(
-  @Param('userId') userId: string,
-) {
-  return this.vendorService.findAllVendorsForUser(userId);
-}
-
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(RoleEnum.admin)
+  @ApiOperation({ summary: 'Get all vendors owned by user (Admin only)' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Returns all vendors owned by the specified user, including pending and non-approved vendors',
+  })
+  async findAllVendorsForUser(@Param('userId') userId: string) {
+    return this.vendorService.findAllVendorsForUser(userId);
+  }
 
   @Get('user/:userId/owned')
   @UseGuards(AuthGuard('jwt'))
