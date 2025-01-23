@@ -116,9 +116,18 @@ export class VendorController {
   @Get('admin/user/:userId/vendors')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.admin)
+  @ApiOperation({ summary: 'Get all vendors owned by user (Admin only)' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Returns all vendors owned by the specified user, including pending and non-approved vendors',
+  })
+  async findAllVendorsForUser(@Param('userId') userId: string) {
+    return this.vendorService.findAllVendorsForUser(userId);
+  }
+
   @Put(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(RoleEnum.admin)
+  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Update a vendor' })
   @ApiResponse({
     status: 200,
@@ -126,10 +135,9 @@ export class VendorController {
   })
   async update(
     @Param('id') id: string,
-    @Body() updateData: any, // We'll define proper DTO later
+    @Body() updateVendorDto: UpdateVendorDto
   ) {
-    const updatedVendor = await this.vendorService.update(id, updateData);
-    return { data: updatedVendor };
+    return this.vendorService.update(id, updateVendorDto);
   }
 
   @Delete(':id')
@@ -141,19 +149,6 @@ export class VendorController {
   })
   async remove(@Param('id') id: string) {
     return this.vendorService.remove(id);
-  }
-
-  @Get('admin/user/:userId/vendors')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(RoleEnum.admin)
-  @ApiOperation({ summary: 'Get all vendors owned by user (Admin only)' })
-  @ApiResponse({
-    status: 200,
-    description:
-      'Returns all vendors owned by the specified user, including pending and non-approved vendors',
-  })
-  async findAllVendorsForUser(@Param('userId') userId: string) {
-    return this.vendorService.findAllVendorsForUser(userId);
   }
 
   @Get('user/:userId/owned')
