@@ -1,3 +1,5 @@
+// ./ixplor-server/src/vendors/vendor.controller.ts
+
 import {
   Controller,
   Get,
@@ -7,20 +9,21 @@ import {
   Body,
   Param,
   Query,
-  BadRequestException,
   UseGuards,
-  Request,
+  BadRequestException,
   UnauthorizedException,
+  Request,
 } from '@nestjs/common';
 import { VendorService } from './vendor.service';
 import { VendorType } from './infrastructure/persistence/document/entities/vendor.schema';
-import { ApiQuery, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../roles/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { RoleEnum } from '../roles/roles.enum';
+import { VendorStatusEnum } from './infrastructure/persistence/document/entities/vendor.schema';
 
 @ApiTags('Vendors')
 @Controller('vendors')
@@ -52,9 +55,6 @@ export class VendorController {
   }
 
   @Get('nearby')
-  @ApiQuery({ name: 'lat', type: Number, required: true })
-  @ApiQuery({ name: 'lng', type: Number, required: true })
-  @ApiQuery({ name: 'radius', type: Number, required: false })
   async findNearby(
     @Query('lat') lat: number,
     @Query('lng') lng: number,
@@ -68,30 +68,18 @@ export class VendorController {
   }
 
   @Get('by-type')
-  @ApiQuery({
-    name: 'type',
-    enum: ['tours', 'lessons', 'rentals', 'tickets'],
-    required: true,
-  })
   async findByType(@Query('type') type: string) {
-    // Validate that the type is a valid VendorType
     const validTypes: VendorType[] = ['tours', 'lessons', 'rentals', 'tickets'];
     if (!validTypes.includes(type as VendorType)) {
       throw new BadRequestException(
         `Invalid vendor type. Must be one of: ${validTypes.join(', ')}`,
       );
     }
-
     return this.vendorService.findByType(type as VendorType);
   }
 
   @Post()
   @UseGuards(AuthGuard('jwt'))
-  @ApiOperation({ summary: 'Create a new vendor' })
-  @ApiResponse({
-    status: 201,
-    description: 'The vendor has been successfully created.',
-  })
   async create(@Body() createVendorDto: CreateVendorDto, @Request() req) {
     return this.vendorService.create(createVendorDto, req.user.id);
   }
@@ -99,13 +87,6 @@ export class VendorController {
   @Post('admin/approve/:vendorId/:userId')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.admin)
-  @ApiOperation({
-    summary: 'Approve a vendor and update user role (Admin only)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'The vendor has been approved and user role updated if needed',
-  })
   async approveVendor(
     @Param('vendorId') vendorId: string,
     @Param('userId') userId: string,
@@ -116,23 +97,12 @@ export class VendorController {
   @Get('admin/user/:userId/vendors')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.admin)
-  @ApiOperation({ summary: 'Get all vendors owned by user (Admin only)' })
-  @ApiResponse({
-    status: 200,
-    description:
-      'Returns all vendors owned by the specified user, including pending and non-approved vendors',
-  })
   async findAllVendorsForUser(@Param('userId') userId: string) {
     return this.vendorService.findAllVendorsForUser(userId);
   }
 
   @Put(':id')
   @UseGuards(AuthGuard('jwt'))
-  @ApiOperation({ summary: 'Update a vendor' })
-  @ApiResponse({
-    status: 200,
-    description: 'The vendor has been successfully updated.',
-  })
   async update(
     @Param('id') id: string,
     @Body() updateVendorDto: UpdateVendorDto
@@ -142,27 +112,16 @@ export class VendorController {
 
   @Delete(':id')
   @UseGuards(AuthGuard('jwt'))
-  @ApiOperation({ summary: 'Delete a vendor' })
-  @ApiResponse({
-    status: 200,
-    description: 'The vendor has been successfully deleted.',
-  })
   async remove(@Param('id') id: string) {
     return this.vendorService.remove(id);
   }
 
   @Get('user/:userId/owned')
   @UseGuards(AuthGuard('jwt'))
-  @ApiOperation({ summary: 'Get vendors owned by user' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns all vendors owned by the specified user',
-  })
   async findVendorsOwnedByUser(
     @Param('userId') userId: string,
     @Request() req,
   ) {
-    // Verify the requesting user matches the userId parameter
     if (req.user.id !== userId) {
       throw new UnauthorizedException("Cannot access other users' vendor data");
     }

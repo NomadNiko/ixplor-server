@@ -16,6 +16,9 @@ import { UpdateVendorDto } from './dto/update-vendor.dto';
 import { ProductType } from '../products/infrastructure/persistence/document/entities/product.schema';
 import { UserSchemaClass } from '../users/infrastructure/persistence/document/entities/user.schema';
 import { RoleEnum } from '../roles/roles.enum';
+import { VendorPaginationParams } from './types/pagination-params.type';
+import { PaginatedVendorResponse, SortOrder, VendorSortField } from './dto/vendor-pagination.dto';
+import { calculateDistance } from './types/location-utils';
 
 @Injectable()
 export class VendorService {
@@ -98,17 +101,18 @@ export class VendorService {
 
   async getVendorOwners(id: string) {
     try {
-      const vendor = await this.vendorModel.findById(id)
+      const vendor = await this.vendorModel
+        .findById(id)
         .select('ownerIds')
         .lean()
         .exec();
-  
+
       if (!vendor) {
         throw new NotFoundException(`Vendor with ID ${id} not found`);
       }
-  
+
       return {
-        data: vendor.ownerIds
+        data: vendor.ownerIds,
       };
     } catch (error) {
       console.error('Error getting vendor owners:', error);
@@ -454,5 +458,161 @@ export class VendorService {
       createdAt: vendor.createdAt?.toISOString(),
       updatedAt: vendor.updatedAt?.toISOString(),
     };
+  }
+
+  // Version 1 Start
+  async findPaginated(
+    params: VendorPaginationParams,
+  ): Promise<PaginatedVendorResponse> {
+    try {
+      const query = this.buildPaginationQuery(params);
+      const sortOptions = this.buildSortOptions(params);
+
+      const totalDocs = await this.vendorModel.countDocuments(query);
+      const totalPages = Math.ceil(totalDocs / params.pageSize);
+
+      let vendors = await this.vendorModel
+        .find(query)
+        .sort(sortOptions)
+        .skip((params.page - 1) * params.pageSize)
+        .limit(params.pageSize)
+        .lean()
+        .exec();
+
+      // Special handling for location-based sorting
+      if (params.latitude && params.longitude) {
+        vendors = await this.sortByDistance(vendors, params);
+      }
+
+      return {
+        data: vendors.map((vendor) => this.transformVendorResponse(vendor)),
+        total: totalDocs,
+        page: params.page,
+        pageSize: params.pageSize,
+        totalPages,
+        hasNextPage: params.page < totalPages,
+        hasPreviousPage: params.page > 1,
+      };
+    } catch (error) {
+      console.error('Error in findPaginated:', error);
+      throw new InternalServerErrorException(
+        'Failed to fetch paginated vendors',
+      );
+    }
+  }
+
+  private buildPaginationQuery(params: VendorPaginationParams): any {
+    const query: any = {};
+
+    // Add status filter if provided
+    if (params.status) {
+      query.vendorStatus = params.status;
+    }
+
+    // Add type filter if provided
+    if (params.type) {
+      query.vendorTypes = params.type;
+    }
+
+    // Add location filters if provided
+    if (params.city) {
+      query.city = new RegExp(params.city, 'i');
+    }
+
+    if (params.state) {
+      query.state = new RegExp(params.state, 'i');
+    }
+
+    if (params.postalCode) {
+      query.postalCode = new RegExp(params.postalCode, 'i');
+    }
+
+    // Add search filter if provided
+    if (params.search) {
+      query.$or = [
+        { businessName: new RegExp(params.search, 'i') },
+        { description: new RegExp(params.search, 'i') },
+      ];
+    }
+
+    return query;
+  }
+
+  private buildSortOptions(params: VendorPaginationParams): any {
+    // Don't apply MongoDB sort if we're doing distance-based sorting
+    if (params.latitude && params.longitude) {
+      return {};
+    }
+
+    const sortOrder = params.sortOrder === SortOrder.DESC ? -1 : 1;
+    return { [params.sortField]: sortOrder };
+  }
+
+  private sortByDistance(
+    vendors: any[],
+    params: VendorPaginationParams,
+  ): any[] {
+    if (!params.latitude || !params.longitude) {
+      return vendors;
+    }
+    return vendors.sort((a, b) => {
+      const distA = calculateDistance(
+        params.latitude!,
+        params.longitude!,
+        a.latitude,
+        a.longitude,
+      );
+      const distB = calculateDistance(
+        params.latitude!,
+        params.longitude!,
+        b.latitude,
+        b.longitude,
+      );
+      return distA - distB;
+    });
+  }
+
+  async findByPostalCode(
+    postalCode: string,
+    page: number = 1,
+    pageSize: number = 10,
+  ): Promise<PaginatedVendorResponse> {
+    return this.findPaginated({
+      page,
+      pageSize,
+      sortField: VendorSortField.NAME,
+      sortOrder: SortOrder.ASC,
+      postalCode,
+    });
+  }
+
+  async searchByName(
+    name: string,
+    page: number = 1,
+    pageSize: number = 10,
+  ): Promise<PaginatedVendorResponse> {
+    return this.findPaginated({
+      page,
+      pageSize,
+      sortField: VendorSortField.NAME,
+      sortOrder: SortOrder.ASC,
+      search: name,
+    });
+  }
+
+  async findNearLocation(
+    latitude: number,
+    longitude: number,
+    page: number = 1,
+    pageSize: number = 10,
+  ): Promise<PaginatedVendorResponse> {
+    return this.findPaginated({
+      page,
+      pageSize,
+      sortField: VendorSortField.NAME,
+      sortOrder: SortOrder.ASC,
+      latitude,
+      longitude,
+    });
   }
 }

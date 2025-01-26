@@ -1,8 +1,7 @@
-// ./src/vendors/vendor.module.ts
-
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { VendorController } from './vendor.controller';
+import { VendorV1Controller } from './controllers/vendor-v1.controller';
 import { VendorService } from './vendor.service';
 import {
   VendorSchemaClass,
@@ -26,7 +25,7 @@ import {
       }
     ]),
   ],
-  controllers: [VendorController],
+  controllers: [VendorController, VendorV1Controller],
   providers: [VendorService],
   exports: [VendorService],
 })
