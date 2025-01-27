@@ -15,6 +15,32 @@ export class StripeConnectService {
     );
   }
 
+  async getOrCreateConnectAccount(existingAccountId?: string) {
+    if (existingAccountId) {
+      try {
+        const existingAccount = await this.stripe.accounts.retrieve(existingAccountId);
+        return existingAccount;
+      } catch (error) {
+        console.error('Error retrieving existing Stripe account:', error);
+        // If the account doesn't exist or there's an error, we'll create a new one
+      }
+    }
+
+    return this.stripe.accounts.create({
+      type: 'express',
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+      settings: {
+        payouts: {
+          schedule: {
+            interval: 'manual',
+          },
+        },
+      },
+    });
+  }
   async createConnectAccount() {
     return this.stripe.accounts.create({
       type: 'express',

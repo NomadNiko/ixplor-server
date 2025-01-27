@@ -40,24 +40,28 @@ export class VendorService {
   // restricted to user
   async findVendorsOwnedByUser(userId: string) {
     try {
-      // Find user first to verify they exist
       const user = await this.userModel.findById(userId);
       if (!user) {
         throw new NotFoundException(`User with ID ${userId} not found`);
       }
-
-      // Get vendors where user is in ownerIds array
+  
       const vendors = await this.vendorModel
         .find({
           ownerIds: userId,
-          vendorStatus: VendorStatusEnum.APPROVED, // Only return approved vendors
+          vendorStatus: VendorStatusEnum.APPROVED,
         })
-        .select('-__v -ownerIds -adminNotes') // Exclude sensitive fields
+        .select('-__v -adminNotes') // We exclude sensitive fields but keep Stripe info
         .lean()
         .exec();
-
+  
       return {
-        data: vendors.map((vendor) => this.transformVendorResponse(vendor)),
+        data: vendors.map((vendor) => ({
+          ...this.transformVendorResponse(vendor),
+          stripeConnectId: vendor.stripeConnectId,
+          stripeAccountStatus: vendor.stripeAccountStatus,
+          accountBalance: vendor.accountBalance,
+          pendingBalance: vendor.pendingBalance
+        })),
       };
     } catch (error) {
       if (error instanceof NotFoundException) {

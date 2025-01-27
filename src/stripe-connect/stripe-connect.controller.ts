@@ -10,23 +10,30 @@ import { VendorService } from 'src/vendors/vendor.service';
 export class StripeConnectController {
   constructor(
     private readonly stripeConnectService: StripeConnectService,
-    private readonly vendorService: VendorService // Add this line
+    private readonly vendorService: VendorService
   ) {}
 
   @Post('account')
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a Stripe Connect account' })
+  @ApiOperation({ summary: 'Create or retrieve a Stripe Connect account' })
   @ApiResponse({
     status: 200,
-    description: 'Returns the created account ID',
+    description: 'Returns the account ID',
   })
-  async createAccount() {
+  async createOrGetAccount(@Body() body: { vendorId?: string }) {
     try {
-      const account = await this.stripeConnectService.createConnectAccount();
+      let existingStripeId: string | undefined;
+      
+      if (body.vendorId) {
+        const vendorResponse = await this.vendorService.getStripeStatus(body.vendorId);
+        existingStripeId = vendorResponse.data.stripeConnectId;
+      }
+
+      const account = await this.stripeConnectService.getOrCreateConnectAccount(existingStripeId);
       return { account: account.id };
     } catch (error) {
-      console.error('An error occurred when calling the Stripe API to create an account:', error);
+      console.error('Error with Stripe account:', error);
       throw error;
     }
   }
@@ -71,5 +78,4 @@ export class StripeConnectController {
       throw new InternalServerErrorException('Failed to update vendor Stripe status');
     }
   }
-
 }
