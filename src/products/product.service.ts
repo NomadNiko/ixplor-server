@@ -107,6 +107,27 @@ export class ProductService {
     };
   }
 
+  async findByOwner(userId: string) {
+    const vendors = await this.vendorService.findVendorsOwnedByUser(userId);
+    if (!vendors.data.length) {
+      return { data: [] };
+    }
+  
+    const vendorIds = vendors.data.map(vendor => vendor._id);
+    
+    const products = await this.productModel
+      .find({
+        vendorId: { $in: vendorIds }
+      })
+      .select('-__v')
+      .lean()
+      .exec();
+  
+    return {
+      data: products.map(product => this.transformProductResponse(product))
+    };
+  }
+
   async findByVendor(vendorId: string) {
     if (!vendorId) {
       throw new BadRequestException('Vendor ID is required');

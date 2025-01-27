@@ -10,6 +10,8 @@ import {
   VendorStatusEnum,
   VendorSchemaDocument,
   VendorType,
+  StripeRequirement,
+  StripeRequirementErrorEnum,
 } from './infrastructure/persistence/document/entities/vendor.schema';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
@@ -614,5 +616,88 @@ export class VendorService {
       latitude,
       longitude,
     });
+  }
+
+  async updateStripeStatus(id: string, stripeData: any) {
+    const accountStatus = {
+      chargesEnabled: stripeData.charges_enabled,
+      payoutsEnabled: stripeData.payouts_enabled,
+      detailsSubmitted: stripeData.details_submitted,
+      currentlyDue: stripeData.requirements?.currently_due || [],
+      eventuallyDue: stripeData.requirements?.eventually_due || [],
+      pastDue: stripeData.requirements?.past_due || [],
+      pendingVerification: stripeData.requirements?.pending_verification 
+        ? {
+            details: stripeData.requirements.pending_verification.details,
+            dueBy: stripeData.requirements.pending_verification.due_by 
+              ? new Date(stripeData.requirements.pending_verification.due_by * 1000)
+              : undefined
+          }
+        : undefined,
+      errors: this.mapStripeErrors(stripeData.requirements?.errors || [])
+    };
+  
+    const updatedVendor = await this.vendorModel.findByIdAndUpdate(
+      id,
+      {
+        stripeConnectId: stripeData.id,
+        stripeAccountStatus: accountStatus,
+        updatedAt: new Date()
+      },
+      { new: true }
+    ).lean();
+  
+    if (!updatedVendor) {
+      throw new NotFoundException(`Vendor with ID ${id} not found`);
+    }
+  
+    return {
+      data: this.transformVendorResponse(updatedVendor),
+      message: 'Stripe account status updated successfully'
+    };
+  }
+  
+  private mapStripeErrors(errors: any[]): StripeRequirement[] {
+    return errors.map(error => ({
+      requirement: error.requirement,
+      error: this.mapStripeErrorCode(error.code),
+      dueDate: error.due_by ? new Date(error.due_by * 1000) : undefined
+    }));
+  }
+  
+  private mapStripeErrorCode(code: string): StripeRequirementErrorEnum {
+    const errorMap: Record<string, StripeRequirementErrorEnum> = {
+      invalid_address_city_state: StripeRequirementErrorEnum.INVALID_ADDRESS_CITY_STATE,
+      invalid_street_address: StripeRequirementErrorEnum.INVALID_STREET_ADDRESS,
+      invalid_postal_code: StripeRequirementErrorEnum.INVALID_POSTAL_CODE,
+      invalid_ssn_last_4: StripeRequirementErrorEnum.INVALID_SSN_LAST_4,
+      invalid_phone_number: StripeRequirementErrorEnum.INVALID_PHONE_NUMBER,
+      invalid_email: StripeRequirementErrorEnum.INVALID_EMAIL,
+      invalid_dob: StripeRequirementErrorEnum.INVALID_DOB,
+      verification_failed_other: StripeRequirementErrorEnum.VERIFICATION_FAILED_OTHER,
+      verification_document_failed: StripeRequirementErrorEnum.VERIFICATION_DOCUMENT_FAILED,
+      tax_id_invalid: StripeRequirementErrorEnum.TAX_ID_INVALID
+    };
+    
+    return errorMap[code] || StripeRequirementErrorEnum.VERIFICATION_FAILED_OTHER;
+  }
+  
+  async getStripeStatus(id: string) {
+    const vendor = await this.vendorModel.findById(id)
+      .select('stripeConnectId stripeAccountStatus accountBalance pendingBalance')
+      .lean();
+  
+    if (!vendor) {
+      throw new NotFoundException(`Vendor with ID ${id} not found`);
+    }
+  
+    return {
+      data: {
+        stripeConnectId: vendor.stripeConnectId,
+        accountStatus: vendor.stripeAccountStatus,
+        accountBalance: vendor.accountBalance,
+        pendingBalance: vendor.pendingBalance
+      }
+    };
   }
 }

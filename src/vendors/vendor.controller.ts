@@ -1,5 +1,3 @@
-// ./ixplor-server/src/vendors/vendor.controller.ts
-
 import {
   Controller,
   Get,
@@ -11,7 +9,6 @@ import {
   Query,
   UseGuards,
   BadRequestException,
-  UnauthorizedException,
   Request,
 } from '@nestjs/common';
 import { VendorService } from './vendor.service';
@@ -23,7 +20,6 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../roles/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { RoleEnum } from '../roles/roles.enum';
-import { VendorStatusEnum } from './infrastructure/persistence/document/entities/vendor.schema';
 
 @ApiTags('Vendors')
 @Controller('vendors')
@@ -94,13 +90,6 @@ export class VendorController {
     return this.vendorService.approveVendor(vendorId, userId);
   }
 
-  @Get('admin/user/:userId/vendors')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(RoleEnum.admin)
-  async findAllVendorsForUser(@Param('userId') userId: string) {
-    return this.vendorService.findAllVendorsForUser(userId);
-  }
-
   @Put(':id')
   @UseGuards(AuthGuard('jwt'))
   async update(
@@ -114,17 +103,5 @@ export class VendorController {
   @UseGuards(AuthGuard('jwt'))
   async remove(@Param('id') id: string) {
     return this.vendorService.remove(id);
-  }
-
-  @Get('user/:userId/owned')
-  @UseGuards(AuthGuard('jwt'))
-  async findVendorsOwnedByUser(
-    @Param('userId') userId: string,
-    @Request() req,
-  ) {
-    if (req.user.id !== userId) {
-      throw new UnauthorizedException("Cannot access other users' vendor data");
-    }
-    return this.vendorService.findVendorsOwnedByUser(userId);
   }
 }

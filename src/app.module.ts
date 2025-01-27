@@ -32,6 +32,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { MongooseConfigService } from './database/mongoose-config.service';
 import { DatabaseConfig } from './database/config/database-config.type';
 import { CartModule } from './cart/cart.module';
+import { StripeConnectModule } from './stripe-connect/stripe-connect.module';
 
 // <database-block>
 const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
@@ -102,6 +103,7 @@ const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
     MailModule,
     MailerModule,
     HomeModule,
+    StripeConnectModule,
   ],
 })
 export class AppModule {}

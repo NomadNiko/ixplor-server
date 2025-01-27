@@ -73,4 +73,7 @@ export class VendorResponseDto {
   
     @ApiProperty()
     updatedAt: string;
+
+    @ApiPropertyOptional({ example: 'acct_1234567890' })
+  stripeConnectId?: string;
   }

@@ -33,7 +33,7 @@
     "seed:run:document": "ts-node -r tsconfig-paths/register ./src/database/seeds/document/run-seed.ts",
     "prebuild": "rimraf dist",
     "build": "nest build",
-    "start": "nest start", 
+    "start": "nest start",
     "start:dev": "nest start --watch",
     "start:swc": "nest start -b swc -w",
     "start:debug": "nest start --debug --watch",
@@ -61,6 +61,7 @@
     "@nestjs/platform-express": "10.4.15",
     "@nestjs/swagger": "8.1.0",
     "@nestjs/typeorm": "10.0.2",
+    "@stripe/connect-js": "^3.3.20",
     "@types/multer-s3": "3.0.3",
     "@types/prompts": "2.4.9",
     "apple-signin-auth": "1.7.8",
@@ -86,6 +87,7 @@
     "rimraf": "6.0.1",
     "rxjs": "7.8.1",
     "source-map-support": "0.5.21",
+    "stripe": "13.4.0",
     "swagger-ui-express": "5.0.1",
     "twitter": "1.7.1",
     "typeorm": "0.3.20"
@@ -116,6 +118,7 @@
     "@typescript-eslint/parser": "8.19.0",
     "env-cmd": "10.1.0",
     "eslint": "9.17.0",
+    "express": "^4.18.2",
     "globals": "^15.9.0",
     "husky": "9.1.7",
     "hygen": "6.2.11",
@@ -130,8 +133,7 @@
     "tsconfig-paths": "4.2.0",
     "tslib": "2.8.1",
     "typescript": "5.7.2",
-    "webpack": "^5.0.0",
-    "express": "^4.18.2"
+    "webpack": "^5.0.0"
   },
   "jest": {
     "moduleFileExtensions": [

@@ -56,6 +56,12 @@ export class ProductController {
     return this.productService.findAllProducts();
   }
 
+  @Get('by-owner/:id')
+@UseGuards(AuthGuard('jwt'))
+async findByOwner(@Param('id') id: string) {
+  return this.productService.findByOwner(id);
+}
+
   @Get('search')
   @ApiOperation({ summary: 'Search products' })
   @ApiQuery({ name: 'term', required: true, type: String })
