@@ -40,4 +40,9 @@ export class StripeConnectService {
       },
     });
   }
+
+  async getAccountDetails(accountId: string) {
+    return this.stripe.accounts.retrieve(accountId);
+  }
+
 }

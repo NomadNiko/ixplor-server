@@ -11,6 +11,7 @@ import {
   UserSchemaClass,
   UserSchema,
 } from '../users/infrastructure/persistence/document/entities/user.schema';
+import { StripeConnectModule } from 'src/stripe-connect/stripe-connect.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import {
         schema: UserSchema,
       }
     ]),
+    StripeConnectModule
   ],
   controllers: [VendorController, VendorV1Controller],
   providers: [VendorService],

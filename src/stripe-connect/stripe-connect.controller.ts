@@ -2,13 +2,15 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { AuthGuard } from '@nestjs/passport';
 import { StripeConnectService } from './stripe-connect.service';
 import { StripeAccountSessionDto } from './dto/stripe-connect.dto';
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, InternalServerErrorException, Param, Post, Request, UseGuards } from '@nestjs/common';
+import { VendorService } from 'src/vendors/vendor.service';
 
 @ApiTags('Stripe Connect')
 @Controller('stripe-connect')
 export class StripeConnectController {
   constructor(
     private readonly stripeConnectService: StripeConnectService,
+    private readonly vendorService: VendorService // Add this line
   ) {}
 
   @Post('account')
@@ -51,4 +53,23 @@ export class StripeConnectController {
       throw error;
     }
   }
+
+  @Post('update-vendor/:vendorId')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update vendor with Stripe account details' })
+  async updateVendorStripeStatus(
+    @Param('vendorId') vendorId: string,
+    @Body() body: any, // You might want to create a DTO for this
+    @Request() req
+  ) {
+    try {
+      const stripeAccountDetails = await this.stripeConnectService.getAccountDetails(body.id);
+      return this.vendorService.updateStripeStatus(vendorId, stripeAccountDetails);
+    } catch (error) {
+      console.error('Error updating vendor Stripe status:', error);
+      throw new InternalServerErrorException('Failed to update vendor Stripe status');
+    }
+  }
+
 }
