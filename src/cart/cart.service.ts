@@ -27,6 +27,7 @@ private transformCartResponse(cart: any) {
       productName: item.productName,
       productDate: item.productDate ? new Date(item.productDate).toISOString() : undefined,
       productStartTime: item.productStartTime,
+      vendorId: item.vendorId
     })) || [],
     total: cart.total || 0,
     createdAt: cart.createdAt ? new Date(cart.createdAt).toISOString() : undefined,
