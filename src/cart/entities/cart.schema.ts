@@ -21,6 +21,10 @@ export class CartItemClass {
   @ApiProperty()
   @Prop({ required: true })
   productName: string;
+  
+  @ApiProperty()
+  @Prop({ required: true }) // Add vendorId as required
+  vendorId: string;
 
   @ApiProperty()
   @Prop()

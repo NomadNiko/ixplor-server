@@ -14,6 +14,11 @@ export class AddToCartDto {
   @Min(1)
   quantity: number;
 
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  vendorId: string;  // Add vendorId to DTO
+
   @ApiProperty({ required: false })
   @IsOptional()
   productDate?: Date;

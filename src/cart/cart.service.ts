@@ -47,7 +47,7 @@ async getCart(userId: string) {
 }
 
 async addToCart(userId: string, addToCartDto: AddToCartDto) {
-  const { productId, quantity, productDate, productStartTime } = addToCartDto;
+  const { productId, quantity, productDate, productStartTime, vendorId } = addToCartDto;
   
   const product = await this.productService.findById(productId);
   if (!product || !product.data) {
@@ -75,6 +75,7 @@ async addToCart(userId: string, addToCartDto: AddToCartDto) {
       quantity,
       price: product.data.productPrice,
       productName: product.data.productName,
+      vendorId,
       productDate,
       productStartTime,
     });
