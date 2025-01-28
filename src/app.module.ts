@@ -33,6 +33,8 @@ import { MongooseConfigService } from './database/mongoose-config.service';
 import { DatabaseConfig } from './database/config/database-config.type';
 import { CartModule } from './cart/cart.module';
 import { StripeConnectModule } from './stripe-connect/stripe-connect.module';
+import { StripeModule } from './stripe/stripe.module';
+import { TransactionModule } from './transactions/transaction.module';
 
 // <database-block>
 const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
@@ -104,6 +106,8 @@ const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
     MailerModule,
     HomeModule,
     StripeConnectModule,
+    StripeModule,
+    TransactionModule,
   ],
 })
 export class AppModule {}
