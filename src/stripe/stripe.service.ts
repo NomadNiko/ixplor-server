@@ -7,6 +7,7 @@ import {
   TransactionStatus, 
   TransactionType 
 } from '../transactions/infrastructure/persistence/document/entities/transaction.schema';
+import { CartItemClass } from 'src/cart/entities/cart.schema';
 
 @Injectable()
 export class StripeService {
@@ -26,47 +27,52 @@ export class StripeService {
   }
 
   async createPaymentIntent({
-    amount,
+    items,
     currency,
     vendorId,
     customerId,
-    productId,
-    description,
-    metadata
+    returnUrl
   }: {
-    amount: number;
+    items: CartItemClass[];
     currency: string;
     vendorId: string;
-    customerId: string;
-    productId: string;
-    description?: string;
-    metadata?: Record<string, any>;
+    customerId?: string;
+    returnUrl: string;
   }) {
     try {
+      // Calculate total amount in cents
+      const totalAmount = items.reduce((sum, item) => 
+        sum + Math.round(item.price * item.quantity * 100), 0);
+
       const vendor = await this.vendorService.getStripeStatus(vendorId);
       if (!vendor?.data?.stripeConnectId) {
         throw new Error('Vendor not configured for payments');
       }
 
       const paymentIntent = await this.stripe.paymentIntents.create({
-        amount,
+        amount: totalAmount, // Amount in cents
         currency,
-        description,
-        metadata,
         automatic_payment_methods: {
           enabled: true,
         },
+        metadata: {
+          vendorId,
+          customerId: customerId || 'unknown',
+          items: JSON.stringify(items),
+        },
+        return_url: returnUrl
       });
 
+      // Creating transaction with all item details
       await this.transactionService.create({
         stripePaymentIntentId: paymentIntent.id,
-        amount,
+        amount: totalAmount,
         currency,
         vendorId,
-        customerId,
-        productId,
-        description,
-        metadata,
+        customerId: customerId || 'unknown',
+        productId: items[0].productId, // Assuming first product
+        description: `Payment for ${items.length} item(s)`,
+        metadata: { items: JSON.stringify(items) },
         status: TransactionStatus.PENDING,
         type: TransactionType.PAYMENT
       });

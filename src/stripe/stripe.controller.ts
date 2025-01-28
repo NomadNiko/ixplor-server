@@ -9,13 +9,15 @@ import {
     Get,
     Query,
     DefaultValuePipe,
-    ParseIntPipe
+    ParseIntPipe,
+    Request
   } from '@nestjs/common';
   import { StripeService } from './stripe.service';
   import { AuthGuard } from '@nestjs/passport';
   import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
   import { TransactionService } from '../transactions/transaction.service';
   import { TransactionFilters } from '../transactions/types/transaction-filters.type';
+import { CartItemClass } from 'src/cart/entities/cart.schema';
   
   @ApiTags('Stripe')
   @Controller('stripe')
@@ -25,20 +27,23 @@ import {
         private readonly transactionService: TransactionService
       ) {}
   
-    @Post('create-payment-intent')
-    @UseGuards(AuthGuard('jwt'))
-    @ApiBearerAuth()
-    async createPaymentIntent(@Body() body: {
-      amount: number;
-      currency: string;
-      vendorId: string;
-      customerId: string;
-      productId: string;
-      description?: string;
-      metadata?: Record<string, any>;
-    }) {
-      return this.stripeService.createPaymentIntent(body);
-    }
+      @Post('create-payment-intent')
+      @UseGuards(AuthGuard('jwt'))
+      @ApiBearerAuth()
+      async createPaymentIntent(
+        @Body() body: {
+          items: CartItemClass[];
+          currency: string;
+          vendorId: string;
+          returnUrl: string;
+        },
+        @Request() req
+      ) {
+        return this.stripeService.createPaymentIntent({
+          ...body,
+          customerId: req.user.id.toString(), // Use the authenticated user's ID
+        });
+      }
   
     @Post('webhook')
     async handleWebhook(
