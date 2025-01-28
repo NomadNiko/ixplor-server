@@ -60,7 +60,8 @@ export class StripeService {
           customerId: customerId || 'unknown',
           items: JSON.stringify(items),
         },
-        return_url: returnUrl
+        return_url: returnUrl,
+        confirm: true
       });
 
       // Creating transaction with all item details
