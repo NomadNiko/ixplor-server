@@ -47,16 +47,7 @@ export class StripeController {
   async getSessionStatus(
     @Query('session_id') sessionId: string
   ) {
-    try {
-      const session = await this.stripe.checkout.sessions.retrieve(sessionId);
-      return {
-        status: session.status,
-        customer_email: session.customer_email
-      };
-    } catch (error) {
-      console.error('Error retrieving session status:', error);
-      throw new InternalServerErrorException('Failed to retrieve session status');
-    }
+    return this.stripeService.getSessionStatus(sessionId);
   }
 
   @Post('webhook')
