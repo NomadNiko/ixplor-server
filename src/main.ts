@@ -12,19 +12,27 @@ import { AppModule } from './app.module';
 import validationOptions from './utils/validation-options';
 import { AllConfigType } from './config/config.type';
 import { ResolvePromisesInterceptor } from './utils/serializer.interceptor';
-import * as express from 'express';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { cors: true });
+  const app = await NestFactory.create(AppModule, { 
+    cors: true,
+    bodyParser: false  // Disable built-in body parser
+  });
+  
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
   const configService = app.get(ConfigService<AllConfigType>);
 
-  // Important: Use raw body parsing for webhook endpoint
-  app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }));
+  // Configure body parsing - order is important
+  app.use((req, res, next) => {
+    if (req.originalUrl.includes('/api/v1/stripe/webhook')) {
+      next();
+    } else {
+      json()(req, res, next);
+    }
+  });
   
-  // Regular JSON parsing for all other routes
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(urlencoded({ extended: true }));
 
   app.enableShutdownHooks();
   app.setGlobalPrefix(

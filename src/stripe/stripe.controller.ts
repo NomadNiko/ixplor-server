@@ -8,7 +8,7 @@ import {
   Get,
   Query,
   Request,
-  InternalServerErrorException
+  RawBodyRequest
 } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -16,11 +16,6 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CartItemClass } from '../cart/entities/cart.schema';
 import Stripe from 'stripe';
 import { Request as ExpressRequest } from 'express';
-
-// Custom interface for raw body request
-interface RawBodyRequest extends ExpressRequest {
-  body: Buffer;
-}
 
 @ApiTags('Stripe')
 @Controller('stripe')
@@ -58,13 +53,19 @@ export class StripeController {
   @Post('webhook')
   async handleWebhook(
     @Headers('stripe-signature') signature: string,
-    @Req() request: RawBodyRequest
+    @Req() request: RawBodyRequest<ExpressRequest>
   ) {
     try {
-      // Pass the raw body directly to the service
+      // Get the raw body from the request
+      const rawBody = request.rawBody;
+      
+      if (!rawBody || !(rawBody instanceof Buffer)) {
+        throw new Error('Missing or invalid raw body');
+      }
+
       return await this.stripeService.handleWebhookEvent(
         signature,
-        request.body // body is already Buffer due to express.raw()
+        rawBody
       );
     } catch (error) {
       console.error('Error handling webhook:', error);
