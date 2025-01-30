@@ -16,7 +16,6 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CartItemClass } from '../cart/entities/cart.schema';
 import Stripe from 'stripe';
 import { Request as ExpressRequest } from 'express';
-
 @ApiTags('Stripe')
 @Controller('stripe')
 export class StripeController {
@@ -24,7 +23,6 @@ export class StripeController {
   constructor(
     private readonly stripeService: StripeService
   ) {}
-
   @Post('create-checkout-session')
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth()
@@ -40,7 +38,6 @@ export class StripeController {
       customerId: req.user.id
     });
   }
-
   @Get('session-status')
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth()
@@ -49,20 +46,17 @@ export class StripeController {
   ) {
     return this.stripeService.getSessionStatus(sessionId);
   }
-
   @Post('webhook')
   async handleWebhook(
     @Headers('stripe-signature') signature: string,
     @Req() request: RawBodyRequest<ExpressRequest>
   ) {
     try {
-      // Get the raw body from the request
       const rawBody = request.rawBody;
       
       if (!rawBody || !(rawBody instanceof Buffer)) {
         throw new Error('Missing or invalid raw body');
       }
-
       return await this.stripeService.handleWebhookEvent(
         signature,
         rawBody

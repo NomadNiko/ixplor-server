@@ -1,4 +1,5 @@
-import { 
+import 'dotenv/config';
+import {
   ClassSerializerInterceptor,
   ValidationPipe,
   VersioningType,
@@ -11,7 +12,7 @@ import { AppModule } from './app.module';
 import validationOptions from './utils/validation-options';
 import { AllConfigType } from './config/config.type';
 import { ResolvePromisesInterceptor } from './utils/serializer.interceptor';
-import { json, urlencoded, raw } from 'express';
+import { json, urlencoded } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { 
@@ -24,8 +25,8 @@ async function bootstrap() {
 
   // Configure body parsing - order is important
   app.use((req, res, next) => {
-    if (req.originalUrl.includes('/api/v1/stripe/webhook')) {
-      raw({ type: 'application/json' })(req, res, next);
+    if (req.originalUrl.includes('/api/stripe/webhook')) {
+      next();
     } else {
       json()(req, res, next);
     }
@@ -33,7 +34,6 @@ async function bootstrap() {
   
   app.use(urlencoded({ extended: true }));
 
-  // Rest of the bootstrap configuration remains the same
   app.enableShutdownHooks();
   app.setGlobalPrefix(
     configService.getOrThrow('app.apiPrefix', { infer: true }),
@@ -62,5 +62,4 @@ async function bootstrap() {
 
   await app.listen(configService.getOrThrow('app.port', { infer: true }));
 }
-
 void bootstrap();
