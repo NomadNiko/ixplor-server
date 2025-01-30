@@ -8,6 +8,9 @@ import {
   TransactionType,
 } from '../transactions/infrastructure/persistence/document/entities/transaction.schema';
 import { CartItemClass } from 'src/cart/entities/cart.schema';
+import { CartService } from 'src/cart/cart.service';
+import { ProductService } from 'src/products/product.service';
+import { TicketService } from 'src/tickets/ticket.service';
 
 interface StripeSessionWithClientSecret extends Stripe.Checkout.Session {
   client_secret?: string;
@@ -25,6 +28,9 @@ export class StripeService {
     private configService: ConfigService,
     private transactionService: TransactionService,
     private vendorService: VendorService,
+    private cartService: CartService,
+    private productService: ProductService,
+    private ticketService: TicketService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY', { infer: true }) ??
@@ -176,13 +182,53 @@ export class StripeService {
   private async handleCheckoutSessionCompleted(
     session: Stripe.Checkout.Session,
   ) {
-    await this.transactionService.updateTransactionStatus(
-      session.id,
-      TransactionStatus.SUCCEEDED,
-      {
-        receiptEmail: session.customer_email || undefined,
-      },
-    );
+    try {
+      // Update transaction status
+      await this.transactionService.updateTransactionStatus(
+        session.id,
+        TransactionStatus.SUCCEEDED,
+        {
+          receiptEmail: session.customer_email || undefined,
+        },
+      );
+  
+      if (session.metadata?.customerId && session.metadata?.items) {
+        const items = JSON.parse(session.metadata.items);
+        const customerId = session.metadata.customerId;
+  
+        // Create tickets for each item
+        for (const item of items) {
+          const product = await this.productService.findById(item.productId);
+          if (product?.data) {
+            await this.ticketService.createTicket({
+              userId: customerId,
+              transactionId: session.id,
+              vendorId: product.data.vendorId,
+              productId: item.productId,
+              productName: product.data.productName,
+              productDescription: product.data.productDescription,
+              productPrice: product.data.productPrice,
+              productType: product.data.productType,
+              productDate: item.productDate,
+              productStartTime: item.productStartTime,
+              productDuration: product.data.productDuration,
+              productLocation: product.data.location,
+              productImageURL: product.data.productImageURL,
+              productAdditionalInfo: product.data.productAdditionalInfo,
+              productRequirements: product.data.productRequirements,
+              productWaiver: product.data.productWaiver,
+              quantity: item.quantity,
+            });
+          }
+        }
+  
+        // Delete the cart
+        await this.cartService.deleteCart(customerId);
+      }
+    } catch (error) {
+      console.error('Error processing successful checkout:', error);
+      throw error;
+    }
   }
 
   private async handlePaymentFailed(
