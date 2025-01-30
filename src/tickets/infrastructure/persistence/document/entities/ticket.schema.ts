@@ -1,7 +1,13 @@
+// src/tickets/infrastructure/persistence/document/entities/ticket.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 
 export type TicketDocument = HydratedDocument<TicketSchemaClass>;
+
+interface GeoLocation {
+  type: string;
+  coordinates: number[];
+}
 
 @Schema({
   timestamps: true,
@@ -49,11 +55,18 @@ export class TicketSchemaClass {
   @Prop()
   productDuration?: number;
 
-  @Prop()
-  productLocation?: {
-    type: string;
-    coordinates: number[];
-  };
+  @Prop({
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number],
+      default: undefined
+    }
+  })
+  productLocation?: GeoLocation;
 
   @Prop()
   productImageURL?: string;
@@ -91,3 +104,4 @@ TicketSchema.index({ transactionId: 1 });
 TicketSchema.index({ vendorId: 1 });
 TicketSchema.index({ productId: 1 });
 TicketSchema.index({ used: 1 });
+TicketSchema.index({ productLocation: '2dsphere' }); // Add geospatial index
