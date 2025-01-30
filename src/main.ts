@@ -16,17 +16,20 @@ import * as express from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { 
-    cors: true,
-    rawBody: true // Enable raw body parsing for Stripe webhooks
+    cors: true
   });
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
   const configService = app.get(ConfigService<AllConfigType>);
 
-  // Configure Stripe webhook route to handle raw bodies before other middleware
-  app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }));
-  
-  // Regular body parsing middleware for other routes
-  app.use(express.json());
+  // Configure body parsing middleware
+  app.use(express.json({ 
+    verify: (req: any, res, buf) => {
+      // Store raw body only for stripe webhook endpoint
+      if (req.originalUrl === '/api/v1/stripe/webhook') {
+        req.rawBody = buf;
+      }
+    }
+  }));
   app.use(express.urlencoded({ extended: true }));
 
   app.enableShutdownHooks();
@@ -41,8 +44,6 @@ async function bootstrap() {
   });
   app.useGlobalPipes(new ValidationPipe(validationOptions));
   app.useGlobalInterceptors(
-    // ResolvePromisesInterceptor is used to resolve promises in responses because class-transformer can't do it
-    // https://github.com/typestack/class-transformer/issues/549
     new ResolvePromisesInterceptor(),
     new ClassSerializerInterceptor(app.get(Reflector)),
   );
