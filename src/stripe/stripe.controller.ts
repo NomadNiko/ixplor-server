@@ -52,14 +52,10 @@ export class StripeController {
     @Req() request: RawBodyRequest<ExpressRequest>
   ) {
     try {
-      const rawBody = request.rawBody;
-      
-      if (!rawBody || !(rawBody instanceof Buffer)) {
-        throw new Error('Missing or invalid raw body');
-      }
+      const event = request.body;
       return await this.stripeService.handleWebhookEvent(
         signature,
-        rawBody
+        event
       );
     } catch (error) {
       console.error('Error handling webhook:', error);
