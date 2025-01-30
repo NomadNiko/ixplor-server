@@ -12,7 +12,7 @@ import { AppModule } from './app.module';
 import validationOptions from './utils/validation-options';
 import { AllConfigType } from './config/config.type';
 import { ResolvePromisesInterceptor } from './utils/serializer.interceptor';
-import { json, urlencoded } from 'express';
+import { json, urlencoded, raw } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { 
@@ -23,10 +23,10 @@ async function bootstrap() {
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
   const configService = app.get(ConfigService<AllConfigType>);
 
-  // Configure body parsing - order is important
+  // Configure body parsing middleware
   app.use((req, res, next) => {
-    if (req.originalUrl.includes('/api/v1/stripe/webhook')) {
-      next();
+    if (req.originalUrl === '/api/v1/stripe/webhook') {
+      raw({ type: 'application/json' })(req, res, next);
     } else {
       json()(req, res, next);
     }
