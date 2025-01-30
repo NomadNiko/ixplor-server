@@ -8,7 +8,8 @@ import {
     UnauthorizedException,
     NotFoundException,
     BadRequestException,
-    Request
+    Request,
+    Post
   } from '@nestjs/common';
   import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
   import { AuthGuard } from '@nestjs/passport';
@@ -87,7 +88,7 @@ import {
       return { data: ticket };
     }
   
-    @Patch(':id/redeem')
+    @Post(':id/redeem')
     @UseGuards(AuthGuard('jwt'))
     @ApiBearerAuth()
     async redeemTicket(
