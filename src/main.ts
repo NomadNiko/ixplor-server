@@ -15,21 +15,15 @@ import { ResolvePromisesInterceptor } from './utils/serializer.interceptor';
 import * as express from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { 
-    cors: true
-  });
+  const app = await NestFactory.create(AppModule, { cors: true });
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
   const configService = app.get(ConfigService<AllConfigType>);
 
-  // Configure body parsing middleware
-  app.use(express.json({ 
-    verify: (req: any, res, buf) => {
-      // Store raw body only for stripe webhook endpoint
-      if (req.originalUrl === '/api/v1/stripe/webhook') {
-        req.rawBody = buf;
-      }
-    }
-  }));
+  // Important: Use raw body parsing for webhook endpoint
+  app.use('/api/v1/stripe/webhook', express.raw({ type: 'application/json' }));
+  
+  // Regular JSON parsing for all other routes
+  app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
   app.enableShutdownHooks();

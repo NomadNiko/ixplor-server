@@ -3,6 +3,7 @@ import {
   Post, 
   Body, 
   Headers,
+  Req,
   UseGuards,
   Get,
   Query,
@@ -14,6 +15,12 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CartItemClass } from '../cart/entities/cart.schema';
 import Stripe from 'stripe';
+import { Request as ExpressRequest } from 'express';
+
+// Custom interface for raw body request
+interface RawBodyRequest extends ExpressRequest {
+  body: Buffer;
+}
 
 @ApiTags('Stripe')
 @Controller('stripe')
@@ -51,15 +58,13 @@ export class StripeController {
   @Post('webhook')
   async handleWebhook(
     @Headers('stripe-signature') signature: string,
-    @Body() body: any
+    @Req() request: RawBodyRequest
   ) {
     try {
-      const payloadString = JSON.stringify(body);
-      const payload = Buffer.from(payloadString);
-      
+      // Pass the raw body directly to the service
       return await this.stripeService.handleWebhookEvent(
         signature,
-        payload
+        request.body // body is already Buffer due to express.raw()
       );
     } catch (error) {
       console.error('Error handling webhook:', error);
