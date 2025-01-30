@@ -12,25 +12,11 @@ import { AppModule } from './app.module';
 import validationOptions from './utils/validation-options';
 import { AllConfigType } from './config/config.type';
 import { ResolvePromisesInterceptor } from './utils/serializer.interceptor';
-import * as express from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { 
-    cors: true,
-    bodyParser: false  // Disable built-in body parser
-  });
-  
+  const app = await NestFactory.create(AppModule, { cors: true});
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
   const configService = app.get(ConfigService<AllConfigType>);
-
-  // Setup raw body parsing middleware
-  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (req.url.startsWith('/api/stripe/webhook')) {
-      express.raw({type: 'application/json'})(req, res, next);
-    } else {
-      express.json()(req, res, next);
-    }
-  });
 
   app.enableShutdownHooks();
   app.setGlobalPrefix(
@@ -44,6 +30,8 @@ async function bootstrap() {
   });
   app.useGlobalPipes(new ValidationPipe(validationOptions));
   app.useGlobalInterceptors(
+    // ResolvePromisesInterceptor is used to resolve promises in responses because class-transformer can't do it
+    // https://github.com/typestack/class-transformer/issues/549
     new ResolvePromisesInterceptor(),
     new ClassSerializerInterceptor(app.get(Reflector)),
   );
@@ -60,5 +48,4 @@ async function bootstrap() {
 
   await app.listen(configService.getOrThrow('app.port', { infer: true }));
 }
-
 void bootstrap();
