@@ -1,8 +1,14 @@
-// src/tickets/infrastructure/persistence/document/entities/ticket.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 
 export type TicketDocument = HydratedDocument<TicketSchemaClass>;
+
+export enum TicketStatus {
+  ACTIVE = 'ACTIVE',
+  CANCELLED = 'CANCELLED',
+  REDEEMED = 'REDEEMED',
+  REVOKED = 'REVOKED'
+}
 
 interface GeoLocation {
   type: string;
@@ -94,6 +100,22 @@ export class TicketSchemaClass {
 
   @Prop({ type: Date })
   updatedAt: Date;
+
+  @Prop({
+    type: String,
+    enum: TicketStatus,
+    default: TicketStatus.ACTIVE
+  })
+  status: TicketStatus;
+
+  @Prop()
+  statusUpdateReason?: string;
+
+  @Prop({ type: Date })
+  statusUpdatedAt?: Date;
+
+  @Prop()
+  statusUpdatedBy?: string;
 }
 
 export const TicketSchema = SchemaFactory.createForClass(TicketSchemaClass);

@@ -704,4 +704,20 @@ export class VendorService {
       }
     };
   }
+
+  async isUserAssociatedWithVendor(userId: string, vendorId: string): Promise<boolean> {
+    try {
+      const vendor = await this.vendorModel
+        .findOne({
+          _id: vendorId,
+          ownerIds: userId
+        })
+        .lean();
+  
+      return !!vendor;
+    } catch (error) {
+      console.error('Error checking user association with vendor:', error);
+      throw new InternalServerErrorException('Failed to verify vendor association');
+    }
+  }
 }

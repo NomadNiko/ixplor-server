@@ -1,7 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { TicketSchemaClass, TicketDocument } from './infrastructure/persistence/document/entities/ticket.schema';
+import { 
+  TicketSchemaClass, 
+  TicketDocument,
+  TicketStatus 
+} from './infrastructure/persistence/document/entities/ticket.schema';
+import { UpdateTicketDto } from './dto/update-ticket.dto';
 
 @Injectable()
 export class TicketService {
@@ -32,5 +37,48 @@ export class TicketService {
       },
       { new: true }
     );
+  }
+
+  async findById(id: string): Promise<TicketDocument | null> {
+    return this.ticketModel.findById(id);
+  }
+
+  async updateStatus(
+    id: string, 
+    status: TicketStatus,
+    {
+      reason,
+      updatedBy
+    }: {
+      reason?: string;
+      updatedBy: string;
+    }
+  ): Promise<TicketDocument> {
+    const ticket = await this.ticketModel.findById(id);
+    if (!ticket) {
+      throw new NotFoundException('Ticket not found');
+    }
+
+    ticket.status = status;
+    ticket.statusUpdateReason = reason;
+    ticket.statusUpdatedAt = new Date();
+    ticket.statusUpdatedBy = updatedBy;
+
+    return ticket.save();
+  }
+
+  async updateTicket(
+    id: string,
+    updateTicketDto: UpdateTicketDto
+  ): Promise<TicketDocument> {
+    const ticket = await this.ticketModel.findById(id);
+    if (!ticket) {
+      throw new NotFoundException('Ticket not found');
+    }
+
+    // Update only the provided fields
+    Object.assign(ticket, updateTicketDto);
+    
+    return ticket.save();
   }
 }
