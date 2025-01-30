@@ -10,7 +10,7 @@ import {
     BadRequestException,
     Request
   } from '@nestjs/common';
-  import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+  import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
   import { AuthGuard } from '@nestjs/passport';
   import { RolesGuard } from '../roles/roles.guard';
   import { Roles } from '../roles/roles.decorator';
@@ -18,8 +18,8 @@ import {
   import { TicketService } from './ticket.service';
   import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
   import { UpdateTicketDto } from './dto/update-ticket.dto';
-import { VendorService } from 'src/vendors/vendor.service';
-import { TicketStatus } from './infrastructure/persistence/document/entities/ticket.schema';
+  import { VendorService } from '../vendors/vendor.service';
+  import { TicketStatus } from './infrastructure/persistence/document/entities/ticket.schema';
   
   @ApiTags('Tickets')
   @Controller('tickets')
@@ -29,17 +29,32 @@ import { TicketStatus } from './infrastructure/persistence/document/entities/tic
       private readonly vendorService: VendorService
     ) {}
   
-    // Get ticket by ID - Public access
     @Get(':id')
     async getTicket(@Param('id') id: string) {
       const ticket = await this.ticketService.findById(id);
-      if (!ticket) {
-        throw new NotFoundException('Ticket not found');
-      }
       return { data: ticket };
     }
   
-    // Update ticket status - Admin only
+    @Get('user/:id')
+    @UseGuards(AuthGuard('jwt'))
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get all tickets for a user' })
+    @ApiResponse({
+      status: 200,
+      description: 'Returns all tickets for the specified user'
+    })
+    async getUserTickets(
+      @Param('id') id: string,
+      @Request() req
+    ) {
+      if (req.user.id !== id && req.user.role?.id !== RoleEnum.admin) {
+        throw new UnauthorizedException('Not authorized to view these tickets');
+      }
+      
+      const tickets = await this.ticketService.findByUserId(id);
+      return { data: tickets };
+    }
+  
     @Patch(':id/status')
     @UseGuards(AuthGuard('jwt'), RolesGuard)
     @Roles(RoleEnum.admin)
@@ -60,7 +75,6 @@ import { TicketStatus } from './infrastructure/persistence/document/entities/tic
       return { data: ticket };
     }
   
-    // Update ticket details - Admin only
     @Patch(':id')
     @UseGuards(AuthGuard('jwt'), RolesGuard)
     @Roles(RoleEnum.admin)
@@ -73,7 +87,6 @@ import { TicketStatus } from './infrastructure/persistence/document/entities/tic
       return { data: ticket };
     }
   
-    // Redeem ticket - Vendor only
     @Patch(':id/redeem')
     @UseGuards(AuthGuard('jwt'))
     @ApiBearerAuth()
@@ -86,7 +99,6 @@ import { TicketStatus } from './infrastructure/persistence/document/entities/tic
         throw new NotFoundException('Ticket not found');
       }
   
-      // Check if user belongs to vendor
       const isVendorUser = await this.vendorService.isUserAssociatedWithVendor(
         req.user.id,
         ticket.vendorId
@@ -100,10 +112,10 @@ import { TicketStatus } from './infrastructure/persistence/document/entities/tic
         throw new BadRequestException(`Ticket cannot be redeemed - current status: ${ticket.status}`);
       }
   
-      return {
-        data: await this.ticketService.updateStatus(id, TicketStatus.REDEEMED, {
-          updatedBy: req.user.id
-        })
-      };
+      const updatedTicket = await this.ticketService.updateStatus(id, TicketStatus.REDEEMED, {
+        updatedBy: req.user.id
+      });
+  
+      return { data: updatedTicket };
     }
   }

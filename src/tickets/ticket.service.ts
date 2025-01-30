@@ -15,32 +15,60 @@ export class TicketService {
     private readonly ticketModel: Model<TicketDocument>
   ) {}
 
-  async createTicket(ticketData: Partial<TicketSchemaClass>): Promise<TicketDocument> {
+  private transformTicket(ticket: TicketDocument) {
+    const ticketObj = ticket.toObject();
+    return {
+      _id: ticketObj._id.toString(),
+      userId: ticketObj.userId,
+      transactionId: ticketObj.transactionId,
+      vendorId: ticketObj.vendorId,
+      productId: ticketObj.productId,
+      productName: ticketObj.productName,
+      productDescription: ticketObj.productDescription,
+      productPrice: ticketObj.productPrice,
+      productType: ticketObj.productType,
+      productDuration: ticketObj.productDuration,
+      productDate: ticketObj.productDate?.toISOString(),
+      productStartTime: ticketObj.productStartTime,
+      productLocation: ticketObj.productLocation ? {
+        type: ticketObj.productLocation.type,
+        coordinates: ticketObj.productLocation.coordinates
+      } : undefined,
+      productImageURL: ticketObj.productImageURL,
+      productAdditionalInfo: ticketObj.productAdditionalInfo,
+      productRequirements: ticketObj.productRequirements,
+      productWaiver: ticketObj.productWaiver,
+      quantity: ticketObj.quantity,
+      used: ticketObj.used,
+      usedAt: ticketObj.usedAt?.toISOString(),
+      status: ticketObj.status,
+      statusUpdateReason: ticketObj.statusUpdateReason,
+      statusUpdatedAt: ticketObj.statusUpdatedAt?.toISOString(),
+      statusUpdatedBy: ticketObj.statusUpdatedBy,
+      createdAt: ticketObj.createdAt?.toISOString(),
+      updatedAt: ticketObj.updatedAt?.toISOString()
+    };
+  }
+
+  async createTicket(ticketData: Partial<TicketSchemaClass>): Promise<any> {
     const ticket = new this.ticketModel(ticketData);
-    return ticket.save();
+    const savedTicket = await ticket.save();
+    return this.transformTicket(savedTicket);
   }
 
-  async findByUserId(userId: string): Promise<TicketDocument[]> {
-    return this.ticketModel.find({ userId }).sort({ createdAt: -1 });
+  async findByUserId(userId: string) {
+    const tickets = await this.ticketModel
+      .find({ userId })
+      .sort({ createdAt: -1 });
+    return tickets.map(ticket => this.transformTicket(ticket));
   }
 
-  async findByTransactionId(transactionId: string): Promise<TicketDocument[]> {
-    return this.ticketModel.find({ transactionId });
-  }
-
-  async markTicketAsUsed(ticketId: string): Promise<TicketDocument | null> {
-    return this.ticketModel.findByIdAndUpdate(
-      ticketId,
-      {
-        used: true,
-        usedAt: new Date()
-      },
-      { new: true }
-    );
-  }
-
-  async findById(id: string): Promise<TicketDocument | null> {
-    return this.ticketModel.findById(id);
+  async findById(id: string) {
+    const ticket = await this.ticketModel.findById(id);
+    if (!ticket) {
+      throw new NotFoundException('Ticket not found');
+    }
+    return this.transformTicket(ticket);
   }
 
   async updateStatus(
@@ -53,7 +81,7 @@ export class TicketService {
       reason?: string;
       updatedBy: string;
     }
-  ): Promise<TicketDocument> {
+  ) {
     const ticket = await this.ticketModel.findById(id);
     if (!ticket) {
       throw new NotFoundException('Ticket not found');
@@ -64,21 +92,43 @@ export class TicketService {
     ticket.statusUpdatedAt = new Date();
     ticket.statusUpdatedBy = updatedBy;
 
-    return ticket.save();
+    const updatedTicket = await ticket.save();
+    return this.transformTicket(updatedTicket);
   }
 
   async updateTicket(
     id: string,
     updateTicketDto: UpdateTicketDto
-  ): Promise<TicketDocument> {
+  ) {
     const ticket = await this.ticketModel.findById(id);
     if (!ticket) {
       throw new NotFoundException('Ticket not found');
     }
 
-    // Update only the provided fields
     Object.assign(ticket, updateTicketDto);
+    const updatedTicket = await ticket.save();
+    return this.transformTicket(updatedTicket);
+  }
+
+  async findByTransactionId(transactionId: string) {
+    const tickets = await this.ticketModel.find({ transactionId });
+    return tickets.map(ticket => this.transformTicket(ticket));
+  }
+
+  async markTicketAsUsed(ticketId: string) {
+    const ticket = await this.ticketModel.findByIdAndUpdate(
+      ticketId,
+      {
+        used: true,
+        usedAt: new Date()
+      },
+      { new: true }
+    );
     
-    return ticket.save();
+    if (!ticket) {
+      throw new NotFoundException('Ticket not found');
+    }
+
+    return this.transformTicket(ticket);
   }
 }
