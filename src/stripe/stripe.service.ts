@@ -13,8 +13,7 @@ interface StripeSessionWithClientSecret extends Stripe.Checkout.Session {
   client_secret?: string;
 }
 
-interface ExtendedSessionCreateParams
-  extends Stripe.Checkout.SessionCreateParams {
+interface ExtendedSessionCreateParams extends Stripe.Checkout.SessionCreateParams {
   ui_mode?: 'hosted' | 'embedded';
 }
 
@@ -49,28 +48,27 @@ export class StripeService {
       if (!Array.isArray(items) || items.length === 0) {
         throw new Error('Invalid or empty items array');
       }
-  
+
       const totalAmount = items.reduce((sum, item) => {
         const itemPrice = Number(item.price) || 0;
         const itemQuantity = Number(item.quantity) || 0;
         return sum + Math.round(itemPrice * itemQuantity * 100);
       }, 0);
-  
+
       if (totalAmount <= 0) {
         throw new Error('Invalid total amount');
       }
-  
+
       const firstItem = items[0];
       if (!firstItem.vendorId) {
         throw new Error('Vendor ID is required');
       }
-  
+
       const vendor = await this.vendorService.getStripeStatus(firstItem.vendorId);
       if (!vendor?.data?.stripeConnectId) {
         throw new Error('Vendor not configured for payments');
       }
-  
-      // Use the ExtendedSessionCreateParams for proper typing
+
       const session = await this.stripe.checkout.sessions.create({
         ui_mode: 'embedded',
         return_url: `${returnUrl}?session_id={CHECKOUT_SESSION_ID}`,
@@ -99,10 +97,17 @@ export class StripeService {
             })),
           ),
         },
-      } as unknown as Stripe.Checkout.SessionCreateParams);
-  
+        payment_intent_data: {
+          metadata: {
+            customerId,
+            vendorId: firstItem.vendorId
+          }
+        }
+      } as unknown as ExtendedSessionCreateParams);
+
+      // Create initial transaction record
       await this.transactionService.create({
-        stripePaymentIntentId: session.id,
+        stripeCheckoutSessionId: session.id,
         amount: totalAmount,
         currency: 'usd',
         vendorId: firstItem.vendorId,
@@ -116,7 +121,7 @@ export class StripeService {
         status: TransactionStatus.PENDING,
         type: TransactionType.PAYMENT,
       });
-  
+
       return {
         clientSecret: (session as StripeSessionWithClientSecret).client_secret ?? '',
       };
@@ -127,8 +132,7 @@ export class StripeService {
       );
     }
   }
-  
-  // Keep the existing webhook methods, but update to handle checkout session events
+
   async handleWebhookEvent(signature: string, payload: Buffer) {
     try {
       const event = this.stripe.webhooks.constructEvent(
@@ -145,7 +149,24 @@ export class StripeService {
             event.data.object as Stripe.Checkout.Session,
           );
           break;
-        // Other existing methods can remain the same
+
+        case 'payment_intent.payment_failed':
+          await this.handlePaymentFailed(
+            event.data.object as Stripe.PaymentIntent
+          );
+          break;
+
+        case 'charge.refunded':
+          await this.handleRefund(
+            event.data.object as Stripe.Charge
+          );
+          break;
+
+        case 'charge.dispute.created':
+          await this.handleDisputeCreated(
+            event.data.object as Stripe.Dispute
+          );
+          break;
       }
 
       return { received: true };
@@ -167,6 +188,49 @@ export class StripeService {
     );
   }
 
+  private async handlePaymentFailed(
+    paymentIntent: Stripe.PaymentIntent
+  ) {
+    await this.transactionService.updateTransactionStatus(
+      paymentIntent.id,
+      TransactionStatus.FAILED,
+      {
+        error: paymentIntent.last_payment_error?.message
+      }
+    );
+  }
+
+  private async handleRefund(
+    charge: Stripe.Charge
+  ) {
+    if (charge.refunds?.data?.[0]) {
+      const refund = charge.refunds.data[0];
+      await this.transactionService.updateTransactionStatus(
+        charge.payment_intent as string,
+        TransactionStatus.REFUNDED,
+        {
+          refundId: refund.id,
+          refundAmount: refund.amount,
+          refundReason: refund.reason || undefined
+        }
+      );
+    }
+  }
+
+  private async handleDisputeCreated(
+    dispute: Stripe.Dispute
+  ) {
+    await this.transactionService.updateTransactionStatus(
+      dispute.payment_intent as string,
+      TransactionStatus.DISPUTED,
+      {
+        disputeId: dispute.id,
+        disputeStatus: dispute.status,
+        disputeAmount: dispute.amount
+      }
+    );
+  }
+
   async getSessionStatus(sessionId: string) {
     try {
       const session = await this.stripe.checkout.sessions.retrieve(sessionId);
@@ -180,5 +244,3 @@ export class StripeService {
     }
   }
 }
-
-

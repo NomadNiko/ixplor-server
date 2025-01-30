@@ -32,7 +32,7 @@ export enum TransactionType {
 })
 export class TransactionSchemaClass {
   @Prop({ required: true })
-  stripePaymentIntentId: string;
+  stripeCheckoutSessionId: string;
 
   @Prop({ required: true })
   amount: number;
@@ -106,7 +106,7 @@ export class TransactionSchemaClass {
 export const TransactionSchema = SchemaFactory.createForClass(TransactionSchemaClass);
 
 // Create indexes
-TransactionSchema.index({ stripePaymentIntentId: 1 }, { unique: true });
+TransactionSchema.index({ stripeCheckoutSessionId: 1 }, { unique: true });
 TransactionSchema.index({ vendorId: 1 });
 TransactionSchema.index({ customerId: 1 });
 TransactionSchema.index({ productId: 1 });

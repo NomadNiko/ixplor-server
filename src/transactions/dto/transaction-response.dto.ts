@@ -7,7 +7,7 @@ export class TransactionResponseDto {
   _id: string;
 
   @ApiProperty({ example: 'pi_1234567890' })
-  stripePaymentIntentId: string;
+  stripeCheckoutSessionId: string;
 
   @ApiProperty({ example: 10000 })
   amount: number;

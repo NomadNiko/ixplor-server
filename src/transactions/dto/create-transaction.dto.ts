@@ -11,7 +11,7 @@ import { TransactionStatus, TransactionType } from '../infrastructure/persistenc
 export class CreateTransactionDto {
   @ApiProperty()
   @IsString()
-  stripePaymentIntentId: string;
+  stripeCheckoutSessionId: string;
 
   @ApiProperty()
   @IsNumber()

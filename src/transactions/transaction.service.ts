@@ -17,9 +17,9 @@ export class TransactionService {
     return transaction.save();
   }
 
-  async findByPaymentIntentId(paymentIntentId: string) {
+  async findByCheckoutSessionId(checkoutSessionId: string) {
     const transaction = await this.transactionModel.findOne({ 
-      stripePaymentIntentId: paymentIntentId 
+      stripeCheckoutSessionId: checkoutSessionId 
     });
     if (!transaction) {
       throw new NotFoundException('Transaction not found');
@@ -28,12 +28,12 @@ export class TransactionService {
   }
 
   async updateTransactionStatus(
-    paymentIntentId: string, 
+    checkoutSessionId: string, 
     status: TransactionStatus,
     additionalData: Partial<TransactionSchemaClass> = {}
   ) {
     const transaction = await this.transactionModel.findOneAndUpdate(
-      { stripePaymentIntentId: paymentIntentId },
+      { stripeCheckoutSessionId: checkoutSessionId },
       { 
         $set: {
           status,
