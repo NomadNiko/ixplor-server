@@ -1,5 +1,4 @@
-import 'dotenv/config';
-import {
+import { 
   ClassSerializerInterceptor,
   ValidationPipe,
   VersioningType,
@@ -23,9 +22,9 @@ async function bootstrap() {
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
   const configService = app.get(ConfigService<AllConfigType>);
 
-  // Configure body parsing middleware
+  // Configure body parsing - order is important
   app.use((req, res, next) => {
-    if (req.originalUrl === '/api/v1/stripe/webhook') {
+    if (req.originalUrl.includes('/api/v1/stripe/webhook')) {
       raw({ type: 'application/json' })(req, res, next);
     } else {
       json()(req, res, next);
@@ -34,6 +33,7 @@ async function bootstrap() {
   
   app.use(urlencoded({ extended: true }));
 
+  // Rest of the bootstrap configuration remains the same
   app.enableShutdownHooks();
   app.setGlobalPrefix(
     configService.getOrThrow('app.apiPrefix', { infer: true }),
@@ -62,4 +62,5 @@ async function bootstrap() {
 
   await app.listen(configService.getOrThrow('app.port', { infer: true }));
 }
+
 void bootstrap();
