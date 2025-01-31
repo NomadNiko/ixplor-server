@@ -1,5 +1,4 @@
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { StripeConnectService } from './stripe-connect.service';
 import { StripeAccountSessionDto } from './dto/stripe-connect.dto';
 import { Body, Controller, InternalServerErrorException, Param, Post, Request, UseGuards } from '@nestjs/common';
@@ -14,8 +13,6 @@ export class StripeConnectController {
   ) {}
 
   @Post('account')
-  @UseGuards(AuthGuard('jwt'))
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Create or retrieve a Stripe Connect account' })
   @ApiResponse({
     status: 200,
@@ -39,8 +36,6 @@ export class StripeConnectController {
   }
 
   @Post('account-session')
-  @UseGuards(AuthGuard('jwt'))
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a Stripe Connect account session' })
   @ApiResponse({
     status: 200,
@@ -62,8 +57,6 @@ export class StripeConnectController {
   }
 
   @Post('update-vendor/:vendorId')
-  @UseGuards(AuthGuard('jwt'))
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Update vendor with Stripe account details' })
   async updateVendorStripeStatus(
     @Param('vendorId') vendorId: string,

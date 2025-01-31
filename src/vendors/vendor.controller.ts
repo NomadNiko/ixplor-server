@@ -13,7 +13,12 @@ import {
 } from '@nestjs/common';
 import { VendorService } from './vendor.service';
 import { VendorType } from './infrastructure/persistence/document/entities/vendor.schema';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -80,6 +85,16 @@ export class VendorController {
     return this.vendorService.create(createVendorDto, req.user.id);
   }
 
+  @Post(':id/stripe-connect')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Update vendor Stripe Connect ID' })
+  async updateStripeConnectId(
+    @Param('id') id: string,
+    @Body() body: { stripeConnectId: string },
+  ) {
+    return this.vendorService.updateStripeConnectId(id, body.stripeConnectId);
+  }
+
   @Post('admin/approve/:vendorId/:userId')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.admin)
@@ -94,7 +109,7 @@ export class VendorController {
   @UseGuards(AuthGuard('jwt'))
   async update(
     @Param('id') id: string,
-    @Body() updateVendorDto: UpdateVendorDto
+    @Body() updateVendorDto: UpdateVendorDto,
   ) {
     return this.vendorService.update(id, updateVendorDto);
   }

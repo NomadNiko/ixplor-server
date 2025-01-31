@@ -41,6 +41,7 @@ export class StripeConnectService {
       },
     });
   }
+  
   async createConnectAccount() {
     return this.stripe.accounts.create({
       type: 'express',

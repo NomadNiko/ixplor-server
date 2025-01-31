@@ -126,6 +126,31 @@ export class VendorService {
     }
   }
 
+  async updateStripeConnectId(vendorId: string, stripeConnectId: string) {
+    try {
+      const updatedVendor = await this.vendorModel.findByIdAndUpdate(
+        vendorId,
+        { 
+          stripeConnectId: stripeConnectId,
+          updatedAt: new Date()
+        },
+        { new: true }
+      ).lean();
+  
+      if (!updatedVendor) {
+        throw new NotFoundException(`Vendor with ID ${vendorId} not found`);
+      }
+  
+      return {
+        data: this.transformVendorResponse(updatedVendor),
+        message: 'Stripe Connect ID updated successfully'
+      };
+    } catch (error) {
+      console.error('Error updating Stripe Connect ID:', error);
+      throw new InternalServerErrorException('Failed to update Stripe Connect ID');
+    }
+  }
+
   async findAllApproved() {
     const vendors = await this.vendorModel
       .find({
@@ -644,7 +669,6 @@ export class VendorService {
     const updatedVendor = await this.vendorModel.findByIdAndUpdate(
       id,
       {
-        stripeConnectId: stripeData.id,
         stripeAccountStatus: accountStatus,
         updatedAt: new Date()
       },
