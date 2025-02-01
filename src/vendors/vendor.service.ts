@@ -2,6 +2,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -21,6 +22,10 @@ import { RoleEnum } from '../roles/roles.enum';
 import { VendorPaginationParams } from './types/pagination-params.type';
 import { PaginatedVendorResponse, SortOrder, VendorSortField } from './dto/vendor-pagination.dto';
 import { calculateDistance } from './types/location-utils';
+import Stripe from 'stripe';
+import { TransactionStatus, TransactionType } from 'src/transactions/infrastructure/persistence/document/entities/transaction.schema';
+import { ConfigService } from '@nestjs/config';
+import { TransactionSchemaClass } from '../transactions/infrastructure/persistence/document/entities/transaction.schema';
 
 @Injectable()
 export class VendorService {
@@ -29,6 +34,9 @@ export class VendorService {
     private readonly vendorModel: Model<VendorSchemaDocument>,
     @InjectModel(UserSchemaClass.name)
     private readonly userModel: Model<UserSchemaClass>,
+    @InjectModel(TransactionSchemaClass.name)
+    private readonly transactionModel: Model<TransactionSchemaClass>,
+    private readonly configService: ConfigService,
   ) {}
 
   async findAllVendors() {
@@ -756,6 +764,93 @@ export class VendorService {
     };
   }
 
+  async triggerPayout(vendorId: string) {
+    const session = await this.vendorModel.db.startSession();
+    
+    try {
+      let result;
+      await session.withTransaction(async () => {
+        // Get vendor details and verify eligibility
+        const vendor = await this.vendorModel.findById(vendorId).session(session);
+        if (!vendor) {
+          throw new NotFoundException('Vendor not found');
+        }
+  
+        if (!vendor.stripeConnectId) {
+          throw new UnprocessableEntityException('Vendor does not have Stripe account connected');
+        }
+  
+        if (!vendor.stripeAccountStatus?.payoutsEnabled) {
+          throw new UnprocessableEntityException('Vendor payouts are not enabled');
+        }
+  
+        if (vendor.internalAccountBalance <= 0) {
+          throw new UnprocessableEntityException('No balance available for payout');
+        }
+  
+        // Convert internal balance to cents for Stripe
+        const payoutAmount = Math.floor(vendor.internalAccountBalance * 100);
+  
+        // Create payout through Stripe
+        const stripe = new Stripe(
+          this.configService.get<string>('STRIPE_SECRET_KEY', { infer: true }) ?? '',
+          {
+            apiVersion: '2023-08-16',
+          },
+        );
+  
+        const payout = await stripe.transfers.create({
+          amount: payoutAmount,
+          currency: 'usd',
+          destination: vendor.stripeConnectId,
+          // Schedule for next business day
+          source_type: 'card',
+          transfer_group: `payout_${vendor._id.toString()}`,
+        });
+  
+        // Create transaction record
+        const transaction = new this.transactionModel({
+          amount: payoutAmount,
+          currency: 'usd',
+          vendorId: vendor._id.toString(), // Convert ObjectId to string
+          status: TransactionStatus.PROCESSING,
+          type: TransactionType.PAYOUT,
+          description: `Payout for vendor ${vendor.businessName}`,
+          metadata: {
+            stripeTransferId: payout.id,
+            payoutAmount: payoutAmount,
+          },
+        });
+        await transaction.save({ session });
+  
+        // Update vendor balance
+        vendor.internalAccountBalance = 0;
+        vendor.vendorPayouts = [...vendor.vendorPayouts, transaction._id.toString()]; // Convert ObjectId to string
+        await vendor.save({ session });
+  
+        result = {
+          success: true,
+          data: {
+            payoutId: payout.id,
+            amount: payoutAmount / 100, // Convert back to dollars for response
+            currency: 'usd',
+            scheduledDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Next day
+          },
+          message: 'Payout scheduled successfully',
+        };
+      });
+      
+      return result;
+    } catch (error) {
+      console.error('Error processing vendor payout:', error);
+      if (error instanceof NotFoundException || error instanceof UnprocessableEntityException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to process payout');
+    } finally {
+      await session.endSession();
+    }
+  }
   
   async getStripeStatus(id: string) {
     const vendor = await this.vendorModel.findById(id)

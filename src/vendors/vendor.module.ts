@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ConfigModule } from '@nestjs/config';
 import { VendorController } from './vendor.controller';
 import { VendorV1Controller } from './controllers/vendor-v1.controller';
 import { VendorService } from './vendor.service';
@@ -11,6 +12,10 @@ import {
   UserSchemaClass,
   UserSchema,
 } from '../users/infrastructure/persistence/document/entities/user.schema';
+import {
+  TransactionSchemaClass,
+  TransactionSchema,
+} from '../transactions/infrastructure/persistence/document/entities/transaction.schema';
 import { StripeConnectModule } from '../stripe-connect/stripe-connect.module';
 
 @Module({
@@ -23,8 +28,13 @@ import { StripeConnectModule } from '../stripe-connect/stripe-connect.module';
       {
         name: UserSchemaClass.name,
         schema: UserSchema,
+      },
+      {
+        name: TransactionSchemaClass.name,
+        schema: TransactionSchema,
       }
     ]),
+    ConfigModule,
     StripeConnectModule
   ],
   controllers: [VendorController, VendorV1Controller],

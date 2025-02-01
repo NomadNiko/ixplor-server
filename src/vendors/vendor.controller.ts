@@ -10,6 +10,7 @@ import {
   UseGuards,
   BadRequestException,
   Request,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { VendorService } from './vendor.service';
 import { VendorType } from './infrastructure/persistence/document/entities/vendor.schema';
@@ -104,6 +105,25 @@ export class VendorController {
   ) {
     return this.vendorService.approveVendor(vendorId, userId);
   }
+
+  @Post('payout/:id')
+@UseGuards(AuthGuard('jwt'))
+@ApiOperation({ summary: 'Trigger payout for vendor' })
+@ApiResponse({
+  status: 200,
+  description: 'Payout initiated successfully',
+})
+async triggerPayout(
+  @Param('id') id: string,
+  @Request() req,
+) {
+  // Verify user has permission to trigger payout for this vendor
+  const hasPermission = await this.vendorService.isUserAssociatedWithVendor(req.user.id, id);
+  if (!hasPermission) {
+    throw new UnauthorizedException('Not authorized to trigger payout for this vendor');
+  }
+  return this.vendorService.triggerPayout(id);
+}
 
   @Put(':id')
   @UseGuards(AuthGuard('jwt'))
