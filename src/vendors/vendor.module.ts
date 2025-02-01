@@ -11,7 +11,7 @@ import {
   UserSchemaClass,
   UserSchema,
 } from '../users/infrastructure/persistence/document/entities/user.schema';
-import { StripeConnectModule } from 'src/stripe-connect/stripe-connect.module';
+import { StripeConnectModule } from '../stripe-connect/stripe-connect.module';
 
 @Module({
   imports: [

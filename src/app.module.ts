@@ -36,6 +36,7 @@ import { StripeConnectModule } from './stripe-connect/stripe-connect.module';
 import { StripeModule } from './stripe/stripe.module';
 import { TransactionModule } from './transactions/transaction.module';
 import { TicketModule } from './tickets/ticket.module';
+import { PaymentModule } from './payment/payment.module';
 
 // <database-block>
 const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
@@ -109,6 +110,7 @@ const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
     TicketModule,
     StripeConnectModule,
     StripeModule,
+    PaymentModule,
     TransactionModule,
   ],
 })

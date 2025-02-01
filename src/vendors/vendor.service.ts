@@ -486,8 +486,16 @@ export class VendorService {
       vendorStatus: vendor.vendorStatus,
       actionNeeded: vendor.actionNeeded,
       adminNotes: vendor.adminNotes,
+      stripeConnectId: vendor.stripeConnectId,
+      stripeAccountStatus: vendor.stripeAccountStatus,
+      accountBalance: vendor.accountBalance,
+      pendingBalance: vendor.pendingBalance,
+      internalAccountBalance: vendor.internalAccountBalance,
+      vendorApplicationFee: vendor.vendorApplicationFee || 0.13, // Default fee if not set
+      vendorPayments: vendor.vendorPayments || [],
+      vendorPayouts: vendor.vendorPayouts || [],
       createdAt: vendor.createdAt?.toISOString(),
-      updatedAt: vendor.updatedAt?.toISOString(),
+      updatedAt: vendor.updatedAt?.toISOString()
     };
   }
 
@@ -709,6 +717,45 @@ export class VendorService {
     
     return errorMap[code] || StripeRequirementErrorEnum.VERIFICATION_FAILED_OTHER;
   }
+
+  async updateVendorStripeStatus(id: string, stripeData: any) {
+    const accountStatus = {
+      chargesEnabled: stripeData.charges_enabled,
+      payoutsEnabled: stripeData.payouts_enabled,
+      detailsSubmitted: stripeData.details_submitted,
+      currentlyDue: stripeData.requirements?.currently_due || [],
+      eventuallyDue: stripeData.requirements?.eventually_due || [],
+      pastDue: stripeData.requirements?.past_due || [],
+      pendingVerification: stripeData.requirements?.pending_verification 
+        ? {
+            details: stripeData.requirements.pending_verification.details,
+            dueBy: stripeData.requirements.pending_verification.due_by 
+              ? new Date(stripeData.requirements.pending_verification.due_by * 1000)
+              : undefined
+          }
+        : undefined,
+      errors: this.mapStripeErrors(stripeData.requirements?.errors || [])
+    };
+  
+    const updatedVendor = await this.vendorModel.findByIdAndUpdate(
+      id,
+      {
+        stripeAccountStatus: accountStatus,
+        updatedAt: new Date()
+      },
+      { new: true }
+    ).lean();
+  
+    if (!updatedVendor) {
+      throw new NotFoundException(`Vendor with ID ${id} not found`);
+    }
+  
+    return {
+      data: this.transformVendorResponse(updatedVendor),
+      message: 'Stripe account status updated successfully'
+    };
+  }
+
   
   async getStripeStatus(id: string) {
     const vendor = await this.vendorModel.findById(id)

@@ -163,6 +163,28 @@ export class VendorSchemaClass {
     set: (v: number) => v * 100
   })
   pendingBalance: number;
+
+  @Prop({ 
+    type: Number,
+    default: 0,
+    get: (v: number) => (v/100).toFixed(2),
+    set: (v: number) => v * 100
+  })
+  internalAccountBalance: number;
+
+  @Prop({
+    type: Number,
+    default: 0.13,
+    min: 0,
+    max: 1
+  })
+  vendorApplicationFee: number;
+
+  @Prop([String])
+  vendorPayments: string[];
+
+  @Prop([String])
+  vendorPayouts: string[];
 }
 
 export const VendorSchema = SchemaFactory.createForClass(VendorSchemaClass);

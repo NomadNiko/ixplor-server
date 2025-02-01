@@ -116,7 +116,22 @@ export class TicketSchemaClass {
 
   @Prop()
   statusUpdatedBy?: string;
+
+  @Prop({ 
+    type: Number,
+    required: true,
+    get: (v: number) => (v/100).toFixed(2),
+    set: (v: number) => v * 100
+  })
+  vendorOwed: number;
+
+  @Prop({ 
+    type: Boolean, 
+    default: false 
+  })
+  vendorPaid: boolean;
 }
+
 
 export const TicketSchema = SchemaFactory.createForClass(TicketSchemaClass);
 
