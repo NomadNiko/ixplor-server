@@ -26,11 +26,19 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../roles/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { RoleEnum } from '../roles/roles.enum';
+import { StripeBalanceResponseDto } from 'src/stripe-connect/dto/stripe-balance.dto';
+import { VendorStripeService } from './services/vendor-stripe.service';
+
 
 @ApiTags('Vendors')
 @Controller('vendors')
+@UseGuards(AuthGuard('jwt'))
+@ApiBearerAuth()
 export class VendorController {
-  constructor(private readonly vendorService: VendorService) {}
+  constructor(
+    private readonly vendorStripeService: VendorStripeService,
+    private readonly vendorService: VendorService
+  ) {}
 
   @Get()
   async findAll() {
@@ -138,5 +146,32 @@ async triggerPayout(
   @UseGuards(AuthGuard('jwt'))
   async remove(@Param('id') id: string) {
     return this.vendorService.remove(id);
+  }
+  @Post(':id/stripe-balance')
+  @ApiOperation({ summary: 'Retrieve and update Stripe account balance' })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved and updated Stripe balance',
+    type: StripeBalanceResponseDto
+  })
+  async updateStripeBalance(
+    @Param('id') vendorId: string,
+    @Request() req
+  ): Promise<StripeBalanceResponseDto> {
+    // Check if user is an admin
+    const isAdmin = req.user.role.id === RoleEnum.admin;
+
+    // Check if user is associated with the vendor
+    const isVendorOwner = await this.vendorService.isUserAssociatedWithVendor(
+      req.user.id, 
+      vendorId
+    );
+
+    // Allow access only to admins or vendor owners
+    if (!isAdmin && !isVendorOwner) {
+      throw new UnauthorizedException('Not authorized to update vendor balance');
+    }
+
+    return this.vendorStripeService.retrieveAndUpdateStripeBalance(vendorId);
   }
 }

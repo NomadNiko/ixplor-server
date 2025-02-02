@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { 
@@ -84,6 +84,20 @@ export class TicketService {
     return this.transformTicket(savedTicket);
   }
 
+  async findByVendorId(vendorId: string) {
+    try {
+      const tickets = await this.ticketModel
+        .find({ vendorId })
+        .sort({ createdAt: -1 });
+        
+      return {
+        data: tickets.map(ticket => this.transformTicket(ticket)),
+      };
+    } catch (error) {
+      console.error('Error finding tickets for vendor:', error);
+      throw new InternalServerErrorException('Failed to fetch vendor tickets');
+    }
+  }
   async findByUserId(userId: string) {
     const tickets = await this.ticketModel
       .find({ userId })

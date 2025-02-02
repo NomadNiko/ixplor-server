@@ -12,24 +12,56 @@ import {
 import { TransactionSchemaClass } from '../../transactions/infrastructure/persistence/document/entities/transaction.schema';
 import { TransactionStatus, TransactionType } from '../../transactions/infrastructure/persistence/document/entities/transaction.schema';
 import { transformVendorResponse } from '../../utils/vendor.transform';
+import { PayoutSchemaClass, PayoutStatus } from 'src/payout/infrastructure/persistence/document/entities/payout.schema';
+import { StripeBalanceResponseDto } from '../../stripe-connect/dto/stripe-balance.dto';
+import { StripeConnectService } from '../../stripe-connect/stripe-connect.service';
 
 @Injectable()
 export class VendorStripeService {
   private stripe: Stripe;
-
   constructor(
     @InjectModel(VendorSchemaClass.name)
     private readonly vendorModel: Model<VendorSchemaDocument>,
-    @InjectModel(TransactionSchemaClass.name)
-    private readonly transactionModel: Model<TransactionSchemaClass>,
+    @InjectModel(PayoutSchemaClass.name)
+    private readonly payoutModel: Model<PayoutSchemaClass>,
     private readonly configService: ConfigService,
+    private readonly stripeConnectService: StripeConnectService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY', { infer: true }) ?? '',
       {
         apiVersion: '2023-08-16',
-      },
+      }
     );
+  }
+
+  async retrieveAndUpdateStripeBalance(vendorId: string): Promise<StripeBalanceResponseDto> {
+    try {
+      // Find the vendor to get their Stripe Connect ID
+      const vendor = await this.vendorModel.findById(vendorId);
+      
+      if (!vendor) {
+        throw new NotFoundException(`Vendor with ID ${vendorId} not found`);
+      }
+
+      if (!vendor.stripeConnectId) {
+        throw new InternalServerErrorException('Vendor does not have a Stripe Connect account');
+      }
+
+      // Retrieve balance from Stripe
+      const balance = await this.stripeConnectService.getAccountBalance(vendor.stripeConnectId);
+
+      // Update vendor with new balance
+      vendor.accountBalance = Math.round(balance.availableBalance * 100);
+      vendor.pendingBalance = Math.round(balance.pendingBalance * 100);
+
+      await vendor.save();
+
+      return balance;
+    } catch (error) {
+      console.error('Error retrieving and updating Stripe balance:', error);
+      throw error;
+    }
   }
 
   async updateStripeConnectId(vendorId: string, stripeConnectId: string) {
@@ -108,21 +140,21 @@ export class VendorStripeService {
         if (!vendor) {
           throw new NotFoundException('Vendor not found');
         }
-  
+
         if (!vendor.stripeConnectId) {
           throw new UnprocessableEntityException('Vendor does not have Stripe account connected');
         }
-  
+
         if (!vendor.stripeAccountStatus?.payoutsEnabled) {
           throw new UnprocessableEntityException('Vendor payouts are not enabled');
         }
-  
+
         if (vendor.internalAccountBalance <= 0) {
           throw new UnprocessableEntityException('No balance available for payout');
         }
-  
+
         const payoutAmount = Math.floor(vendor.internalAccountBalance * 100);
-  
+
         const payout = await this.stripe.transfers.create({
           amount: payoutAmount,
           currency: 'usd',
@@ -130,29 +162,31 @@ export class VendorStripeService {
           source_type: 'card',
           transfer_group: `payout_${vendor._id.toString()}`,
         });
-  
-        const transaction = new this.transactionModel({
-          amount: payoutAmount,
-          currency: 'usd',
+
+        const payoutRecord = new this.payoutModel({
           vendorId: vendor._id.toString(),
-          status: TransactionStatus.PROCESSING,
-          type: TransactionType.PAYOUT,
+          amount: payoutAmount,
+          status: PayoutStatus.PROCESSING,
           description: `Payout for vendor ${vendor.businessName}`,
-          metadata: {
-            stripeTransferId: payout.id,
-            payoutAmount: payoutAmount,
+          stripeTransferDetails: {
+            transferId: payout.id,
+            destination: payout.destination,
+            sourceType: payout.source_type,
+            transferGroup: payout.transfer_group
           },
+          processedAt: new Date()
         });
-        await transaction.save({ session });
-  
+        await payoutRecord.save({ session });
+
         vendor.internalAccountBalance = 0;
-        vendor.vendorPayouts = [...vendor.vendorPayouts, transaction._id.toString()];
+        vendor.vendorPayouts = [...vendor.vendorPayouts, payoutRecord._id.toString()];
         await vendor.save({ session });
-  
+
         result = {
           success: true,
           data: {
-            payoutId: payout.id,
+            payoutId: payoutRecord._id.toString(),
+            transferId: payout.id,
             amount: payoutAmount / 100,
             currency: 'usd',
             scheduledDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
