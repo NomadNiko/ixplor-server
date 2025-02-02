@@ -71,4 +71,57 @@ export class PayoutService {
       updatedAt: payout.updatedAt?.toISOString()
     };
   }
+  async findById(id: string) {
+    try {
+      const payout = await this.payoutModel.findById(id).lean();
+      
+      if (!payout) {
+        throw new NotFoundException('Payout not found');
+      }
+
+      return {
+        data: this.transformPayout(payout),
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('Error finding payout:', error);
+      throw new InternalServerErrorException('Failed to fetch payout');
+    }
+  }
+  async getPayoutStats(vendorId: string) {
+    try {
+      const stats = await this.payoutModel.aggregate([
+        { $match: { vendorId } },
+        {
+          $group: {
+            _id: null,
+            totalPayouts: { $sum: 1 },
+            totalAmount: { $sum: '$amount' },
+            successfulPayouts: {
+              $sum: { $cond: [{ $eq: ['$status', PayoutStatus.SUCCEEDED] }, 1, 0] },
+            },
+            failedPayouts: {
+              $sum: { $cond: [{ $eq: ['$status', PayoutStatus.FAILED] }, 1, 0] },
+            },
+            lastPayout: { $max: '$createdAt' },
+          },
+        },
+      ]);
+
+      return {
+        data: stats[0] || {
+          totalPayouts: 0,
+          totalAmount: 0,
+          successfulPayouts: 0,
+          failedPayouts: 0,
+          lastPayout: null,
+        },
+      };
+    } catch (error) {
+      console.error('Error getting payout stats:', error);
+      throw new InternalServerErrorException('Failed to get payout statistics');
+    }
+  }
 }
