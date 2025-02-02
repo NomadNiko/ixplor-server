@@ -10,13 +10,13 @@ export enum TransactionStatus {
   FAILED = 'failed',
   REFUNDED = 'refunded',
   PARTIALLY_REFUNDED = 'partially_refunded',
-  DISPUTED = 'disputed'
+  DISPUTED = 'disputed',
 }
 
 export enum TransactionType {
   PAYMENT = 'payment',
   REFUND = 'refund',
-  PAYOUT = 'payout'
+  PAYOUT = 'payout',
 }
 
 export interface StripePaymentMethodDetails {
@@ -44,8 +44,8 @@ export interface StripePaymentMethodDetails {
 }
 
 export interface StripeTransferDetails {
-  destination?: string;  // Stripe account ID where funds were transferred
-  destination_payment?: string;  // Stripe payment ID on the destination account
+  destination?: string; // Stripe account ID where funds were transferred
+  destination_payment?: string; // Stripe payment ID on the destination account
   source_type?: string;
   transfer_group?: string;
 }
@@ -68,14 +68,14 @@ export interface StripeTransferDetails {
       delete ret.__v;
       return ret;
     },
-    virtuals: true
-  }
+    virtuals: true,
+  },
 })
 export class TransactionSchemaClass {
-  @Prop({ 
-    required: function(this: TransactionSchemaClass) {
+  @Prop({
+    required: function (this: TransactionSchemaClass) {
       return this.type === TransactionType.PAYMENT;
-    }
+    },
   })
   stripeCheckoutSessionId?: string;
 
@@ -88,47 +88,42 @@ export class TransactionSchemaClass {
   @Prop({ required: true })
   vendorId: string;
 
-  @Prop({ 
-    required: function(this: TransactionSchemaClass) {
+  @Prop({
+    required: function (this: TransactionSchemaClass) {
       return this.type === TransactionType.PAYMENT;
-    }
+    },
   })
   customerId?: string;
 
-  @Prop({ 
-    required: function(this: TransactionSchemaClass) {
+  @Prop({
+    required: function (this: TransactionSchemaClass) {
       return this.type === TransactionType.PAYMENT;
-    }
+    },
   })
   productId?: string;
 
   @Prop({
     type: String,
     enum: TransactionStatus,
-    default: TransactionStatus.PENDING
+    default: TransactionStatus.PENDING,
   })
   status: TransactionStatus;
 
   @Prop({
     type: String,
     enum: TransactionType,
-    required: true
+    required: true,
   })
   type: TransactionType;
 
-  @Prop({ 
-    type: Object,
-    required: function(this: TransactionSchemaClass) {
-      return this.type === TransactionType.PAYMENT;
-    }
-  })
+  @Prop({ type: Object }) // Changed from required to optional
   paymentMethodDetails?: StripePaymentMethodDetails;
 
-  @Prop({ 
+  @Prop({
     type: Object,
-    required: function(this: TransactionSchemaClass) {
+    required: function (this: TransactionSchemaClass) {
       return this.type === TransactionType.PAYOUT;
-    }
+    },
   })
   transferDetails?: StripeTransferDetails;
 
@@ -143,9 +138,9 @@ export class TransactionSchemaClass {
 
   // Fields for refunds
   @Prop({
-    required: function(this: TransactionSchemaClass) {
+    required: function (this: TransactionSchemaClass) {
       return this.type === TransactionType.REFUND;
-    }
+    },
   })
   refundId?: string;
 
@@ -208,13 +203,18 @@ export class TransactionSchemaClass {
   lastModifiedBy?: string;
 }
 
-export const TransactionSchema = SchemaFactory.createForClass(TransactionSchemaClass);
+export const TransactionSchema = SchemaFactory.createForClass(
+  TransactionSchemaClass,
+);
 
 // Create indexes
-TransactionSchema.index({ stripeCheckoutSessionId: 1 }, { 
-  unique: true, 
-  partialFilterExpression: { type: TransactionType.PAYMENT } 
-});
+TransactionSchema.index(
+  { stripeCheckoutSessionId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { type: TransactionType.PAYMENT },
+  },
+);
 TransactionSchema.index({ vendorId: 1 });
 TransactionSchema.index({ customerId: 1 });
 TransactionSchema.index({ productId: 1 });
@@ -232,7 +232,7 @@ TransactionSchema.index({ vendorId: 1, createdAt: -1 });
 TransactionSchema.index({ description: 'text' });
 
 // Pre-save middleware for setting default values and validations
-TransactionSchema.pre('save', function(next) {
+TransactionSchema.pre('save', function (next) {
   // Ensure amounts are always stored as integers (cents)
   if (this.amount && !Number.isInteger(this.amount)) {
     this.amount = Math.round(this.amount * 100);
@@ -259,6 +259,6 @@ TransactionSchema.pre('save', function(next) {
 });
 
 // Virtual for formatted amount
-TransactionSchema.virtual('formattedAmount').get(function() {
+TransactionSchema.virtual('formattedAmount').get(function () {
   return (this.amount / 100).toFixed(2);
 });
