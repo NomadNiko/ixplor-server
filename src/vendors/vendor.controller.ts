@@ -32,8 +32,6 @@ import { VendorStripeService } from './services/vendor-stripe.service';
 
 @ApiTags('Vendors')
 @Controller('vendors')
-@UseGuards(AuthGuard('jwt'))
-@ApiBearerAuth()
 export class VendorController {
   constructor(
     private readonly vendorStripeService: VendorStripeService,
