@@ -194,7 +194,6 @@ export class StripeService {
     session: Stripe.Checkout.Session,
   ) {
     try {
-      // Update transaction status
       await this.transactionService.updateTransactionStatus(
         session.id,
         TransactionStatus.SUCCEEDED,
@@ -207,33 +206,34 @@ export class StripeService {
         const items = JSON.parse(session.metadata.items);
         const customerId = session.metadata.customerId;
 
-        // Create tickets for each item
         for (const item of items) {
           const product = await this.productService.findById(item.productId);
+          
           if (product?.data) {
-            await this.ticketService.createTicket({
-              userId: customerId,
-              transactionId: session.id,
-              vendorId: product.data.vendorId,
-              productId: item.productId,
-              productName: product.data.productName,
-              productDescription: product.data.productDescription,
-              productPrice: product.data.productPrice,
-              productType: product.data.productType,
-              productDate: product.data.productDate,
-              productStartTime: product.data.productStartTime,
-              productDuration: product.data.productDuration,
-              productLocation: product.data.location,
-              productImageURL: product.data.productImageURL,
-              productAdditionalInfo: product.data.productAdditionalInfo,
-              productRequirements: product.data.productRequirements,
-              productWaiver: product.data.productWaiver,
-              quantity: item.quantity,
-            });
+            // Create individual tickets based on quantity
+            for (let i = 0; i < item.quantity; i++) {
+              await this.ticketService.createTicket({
+                userId: customerId,
+                transactionId: session.id,
+                vendorId: product.data.vendorId,
+                productId: item.productId,
+                productName: product.data.productName,
+                productDescription: product.data.productDescription,
+                productPrice: product.data.productPrice,
+                productType: product.data.productType,
+                productDate: product.data.productDate,
+                productStartTime: product.data.productStartTime,
+                productDuration: product.data.productDuration,
+                productLocation: product.data.location,
+                productImageURL: product.data.productImageURL,
+                productAdditionalInfo: product.data.productAdditionalInfo,
+                productRequirements: product.data.productRequirements,
+                productWaiver: product.data.productWaiver,
+                quantity: 1, // Each ticket represents one item
+              });
+            }
           }
         }
-
-        // Delete the cart
         await this.cartService.deleteCart(customerId);
       }
     } catch (error) {
@@ -241,6 +241,7 @@ export class StripeService {
       throw error;
     }
   }
+
 
   private async handlePaymentFailed(paymentIntent: Stripe.PaymentIntent) {
     await this.transactionService.updateTransactionStatus(
