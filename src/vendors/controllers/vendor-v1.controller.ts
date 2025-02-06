@@ -5,11 +5,18 @@ import {
     DefaultValuePipe,
     ParseIntPipe,
     ParseFloatPipe,
-    Param
+    Param,
+    UseGuards,
+    UnauthorizedException,
+    Request
   } from '@nestjs/common';
   import { ApiTags, ApiOperation, ApiQuery, ApiParam } from '@nestjs/swagger';
   import { VendorService } from '../vendor.service';
   import { PaginatedVendorResponse, SortOrder, VendorSortField } from '../dto/vendor-pagination.dto';
+  import { AuthGuard } from '@nestjs/passport';
+  import { RolesGuard } from '../../roles/roles.guard';
+  import { Roles } from '../../roles/roles.decorator';
+  import { RoleEnum } from '../../roles/roles.enum';
   
   @ApiTags('Vendors V1')
   @Controller('v1/vendors')
@@ -132,5 +139,24 @@ import {
         sortOrder: SortOrder.ASC,
         postalCode
       });
+    }
+  
+    @Get('admin/user/:userId/vendors')
+    @UseGuards(AuthGuard('jwt'), RolesGuard)
+    @Roles(RoleEnum.admin)
+    async findAllVendorsForUser(@Param('userId') userId: string) {
+      return this.vendorService.findAllVendorsForUser(userId);
+    }
+  
+    @Get('user/:userId/owned')
+    @UseGuards(AuthGuard('jwt'))
+    async findVendorsOwnedByUser(
+      @Param('userId') userId: string,
+      @Request() req,
+    ) {
+      if (req.user.id !== userId) {
+        throw new UnauthorizedException("Cannot access other users' vendor data");
+      }
+      return this.vendorService.findVendorsOwnedByUser(userId);
     }
   }

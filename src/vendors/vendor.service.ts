@@ -1,618 +1,135 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  NotFoundException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import {
-  VendorSchemaClass,
-  VendorStatusEnum,
-  VendorSchemaDocument,
-  VendorType,
-} from './infrastructure/persistence/document/entities/vendor.schema';
+import { Injectable } from '@nestjs/common';
+import { VendorCrudService } from './services/vendor-crud.service';
+import { VendorSearchService } from './services/vendor-search.service';
+import { VendorStripeService } from './services/vendor-stripe.service';
+import { VendorOwnerService } from './services/vendor-owner.service';
+import { VendorProductService } from './services/vendor-product.service';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
-import { ProductType } from '../products/infrastructure/persistence/document/entities/product.schema';
-import { UserSchemaClass } from '../users/infrastructure/persistence/document/entities/user.schema';
-import { RoleEnum } from '../roles/roles.enum';
 import { VendorPaginationParams } from './types/pagination-params.type';
-import { PaginatedVendorResponse, SortOrder, VendorSortField } from './dto/vendor-pagination.dto';
-import { calculateDistance } from './types/location-utils';
+import { VendorType } from './infrastructure/persistence/document/entities/vendor.schema';
 
 @Injectable()
 export class VendorService {
   constructor(
-    @InjectModel(VendorSchemaClass.name)
-    private readonly vendorModel: Model<VendorSchemaDocument>,
-    @InjectModel(UserSchemaClass.name)
-    private readonly userModel: Model<UserSchemaClass>,
+    private readonly vendorCrudService: VendorCrudService,
+    private readonly vendorSearchService: VendorSearchService,
+    private readonly vendorStripeService: VendorStripeService,
+    private readonly vendorOwnerService: VendorOwnerService,
+    private readonly vendorProductService: VendorProductService,
   ) {}
 
+  // CRUD Operations
   async findAllVendors() {
-    const vendors = await this.vendorModel.find().select('-__v').lean().exec();
-    return {
-      data: vendors.map((vendor) => this.transformVendorResponse(vendor)),
-    };
-  }
-  // restricted to user
-  async findVendorsOwnedByUser(userId: string) {
-    try {
-      // Find user first to verify they exist
-      const user = await this.userModel.findById(userId);
-      if (!user) {
-        throw new NotFoundException(`User with ID ${userId} not found`);
-      }
-
-      // Get vendors where user is in ownerIds array
-      const vendors = await this.vendorModel
-        .find({
-          ownerIds: userId,
-          vendorStatus: VendorStatusEnum.APPROVED, // Only return approved vendors
-        })
-        .select('-__v -ownerIds -adminNotes') // Exclude sensitive fields
-        .lean()
-        .exec();
-
-      return {
-        data: vendors.map((vendor) => this.transformVendorResponse(vendor)),
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      console.error('Error finding vendors for user:', error);
-      throw new InternalServerErrorException('Failed to fetch user vendors');
-    }
-  }
-  // for admins
-  async findAllVendorsForUser(userId: string) {
-    try {
-      // Find user first to verify they exist
-      const user = await this.userModel.findById(userId);
-      if (!user) {
-        throw new NotFoundException(`User with ID ${userId} not found`);
-      }
-
-      // Get all vendors where user is in ownerIds array, regardless of status
-      const vendors = await this.vendorModel
-        .find({
-          ownerIds: userId,
-        })
-        .select('-__v') // We keep more fields for admin view
-        .lean()
-        .exec();
-
-      return {
-        data: vendors.map((vendor) => ({
-          ...this.transformVendorResponse(vendor),
-          ownerIds: vendor.ownerIds, // Include ownership data for admin view
-          adminNotes: vendor.adminNotes,
-        })),
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      console.error('Error finding vendors for user (admin):', error);
-      throw new InternalServerErrorException('Failed to fetch user vendors');
-    }
-  }
-
-  async getVendorOwners(id: string) {
-    try {
-      const vendor = await this.vendorModel
-        .findById(id)
-        .select('ownerIds')
-        .lean()
-        .exec();
-
-      if (!vendor) {
-        throw new NotFoundException(`Vendor with ID ${id} not found`);
-      }
-
-      return {
-        data: vendor.ownerIds,
-      };
-    } catch (error) {
-      console.error('Error getting vendor owners:', error);
-      throw new InternalServerErrorException('Failed to get vendor owners');
-    }
+    return this.vendorCrudService.findAll();
   }
 
   async findAllApproved() {
-    const vendors = await this.vendorModel
-      .find({
-        vendorStatus: VendorStatusEnum.APPROVED,
-      })
-      .select('-__v')
-      .lean()
-      .exec();
-    return {
-      data: vendors.map((vendor) => this.transformVendorResponse(vendor)),
-    };
-  }
-
-  async findNearby(lat: number, lng: number, radius: number = 10) {
-    const radiusInMeters = radius * 1609.34; // Convert miles to meters
-
-    const vendors = await this.vendorModel
-      .find({
-        vendorStatus: VendorStatusEnum.APPROVED,
-        location: {
-          $near: {
-            $geometry: {
-              type: 'Point',
-              coordinates: [lng, lat],
-            },
-            $maxDistance: radiusInMeters,
-          },
-        },
-      })
-      .select('-__v')
-      .lean()
-      .exec();
-    return {
-      data: vendors.map((vendor) => this.transformVendorResponse(vendor)),
-    };
-  }
-
-  async findByType(type: VendorType) {
-    const vendors = await this.vendorModel
-      .find({
-        vendorStatus: VendorStatusEnum.APPROVED,
-        vendorTypes: type,
-      })
-      .select('-__v')
-      .lean()
-      .exec();
-    return {
-      data: vendors.map((vendor) => this.transformVendorResponse(vendor)),
-    };
+    return this.vendorCrudService.findAllApproved();
   }
 
   async create(createVendorDto: CreateVendorDto, userId: string) {
-    const createdVendor = new this.vendorModel({
-      ...createVendorDto,
-      vendorStatus: VendorStatusEnum.SUBMITTED,
-      ownerIds: [userId],
-    });
-
-    const vendor = await createdVendor.save();
-
-    // Update the user's vendorProfileIds
-    await this.userModel.findByIdAndUpdate(
-      userId,
-      {
-        $addToSet: { vendorProfileIds: vendor._id },
-      },
-      { new: true },
-    );
-
-    return {
-      data: this.transformVendorResponse(vendor),
-      message: 'Vendor created successfully',
-    };
+    return this.vendorCrudService.create(createVendorDto, userId);
   }
 
-  private async updateOwnerRoles(ownerIds: string[]) {
-    try {
-      // Update all owners who are currently "user" role to "vendor" role
-      await this.userModel.updateMany(
-        {
-          _id: { $in: ownerIds },
-          'role._id': RoleEnum.user, // Only update if they are currently a user
-        },
-        {
-          $set: {
-            'role._id': RoleEnum.vendor,
-          },
-        },
-      );
-    } catch (error) {
-      console.error('Error updating owner roles:', error);
-      throw new InternalServerErrorException('Failed to update owner roles');
-    }
-  }
-
-  async approveVendor(vendorId: string, userId: string) {
-    try {
-      // Start a session for transactional operations
-      const session = await this.vendorModel.db.startSession();
-      let approvedVendor;
-
-      await session.withTransaction(async () => {
-        // Update vendor status to APPROVED
-        approvedVendor = await this.vendorModel
-          .findByIdAndUpdate(
-            vendorId,
-            {
-              vendorStatus: VendorStatusEnum.APPROVED,
-              updatedAt: new Date(),
-            },
-            {
-              new: true,
-              session,
-              runValidators: true,
-            },
-          )
-          .lean();
-
-        if (!approvedVendor) {
-          throw new NotFoundException(`Vendor with ID ${vendorId} not found`);
-        }
-
-        // Get user and check if they need role update
-        const user = await this.userModel.findById(userId).session(session);
-        if (!user) {
-          throw new NotFoundException(`User with ID ${userId} not found`);
-        }
-
-        // Only update role if user is not an admin and not already a vendor
-        if (user.role?._id !== '1' && user.role?._id !== '3') {
-          await this.userModel.findByIdAndUpdate(
-            userId,
-            {
-              'role._id': '3',
-              updatedAt: new Date(),
-            },
-            {
-              session,
-              runValidators: true,
-            },
-          );
-        }
-        // Ensure user is in vendor's ownerIds if not already
-        if (!approvedVendor.ownerIds.includes(userId)) {
-          await this.vendorModel.findByIdAndUpdate(
-            vendorId,
-            {
-              $addToSet: { ownerIds: userId },
-              updatedAt: new Date(),
-            },
-            { session },
-          );
-        }
-      });
-
-      await session.endSession();
-
-      return {
-        data: this.transformVendorResponse(approvedVendor),
-        message: 'Vendor successfully approved and user role updated',
-      };
-    } catch (error) {
-      console.error('Error during vendor approval:', error);
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new InternalServerErrorException(
-        'Failed to approve vendor and update user role',
-      );
-    }
-  }
-
-  async update(id: string, updateData: UpdateVendorDto) {
-    const vendor = await this.vendorModel.findById(id);
-    if (!vendor) {
-      throw new NotFoundException(`Vendor with ID ${id} not found`);
-    }
-
-    // If status is being changed to APPROVED, update owner roles
-    if (
-      updateData.vendorStatus === VendorStatusEnum.APPROVED &&
-      vendor.vendorStatus !== VendorStatusEnum.APPROVED
-    ) {
-      await this.updateOwnerRoles(vendor.ownerIds);
-    }
-
-    const updatedVendor = await this.vendorModel
-      .findByIdAndUpdate(
-        id,
-        { $set: updateData },
-        { new: true, runValidators: true },
-      )
-      .lean()
-      .exec();
-
-    if (!updatedVendor) {
-      throw new NotFoundException(`Vendor with ID ${id} not found`);
-    }
-
-    return {
-      data: this.transformVendorResponse(updatedVendor),
-      message: 'Vendor updated successfully',
-    };
+  async update(id: string, updateVendorDto: UpdateVendorDto) {
+    return this.vendorCrudService.update(id, updateVendorDto);
   }
 
   async remove(id: string) {
-    const vendor = await this.vendorModel.findById(id);
-    if (!vendor) {
-      throw new NotFoundException(`Vendor with ID ${id} not found`);
-    }
-
-    try {
-      // Start a session for the transaction
-      const session = await this.vendorModel.db.startSession();
-
-      await session.withTransaction(async () => {
-        // Delete all products associated with this vendor
-        const ProductModel = this.vendorModel.db.model('ProductSchemaClass');
-        await ProductModel.deleteMany({ vendorId: id }).session(session);
-
-        // Remove vendorProfileId from all associated users
-        await this.userModel
-          .updateMany(
-            { vendorProfileIds: id },
-            { $pull: { vendorProfileIds: id } },
-          )
-          .session(session);
-
-        // Delete the vendor
-        await this.vendorModel.findByIdAndDelete(id).session(session);
-      });
-
-      await session.endSession();
-
-      return {
-        message: 'Vendor and associated data deleted successfully',
-      };
-    } catch (error) {
-      console.error('Error during vendor deletion:', error);
-      throw new InternalServerErrorException(
-        'Failed to delete vendor and associated data',
-      );
-    }
+    return this.vendorCrudService.remove(id);
   }
 
-  async removeUserFromVendors(userId: string) {
-    try {
-      const vendors = await this.vendorModel.find({ ownerIds: userId });
-
-      for (const vendor of vendors) {
-        // Remove the user from ownerIds
-        vendor.ownerIds = vendor.ownerIds.filter((id) => id !== userId);
-
-        if (vendor.ownerIds.length === 0) {
-          // If no owners left, delete the vendor and its products
-          await this.remove(vendor._id.toString());
-        } else {
-          // Otherwise just update the vendor
-          await vendor.save();
-        }
-      }
-    } catch (error) {
-      console.error('Error removing user from vendors:', error);
-      throw new InternalServerErrorException(
-        'Failed to remove user from vendors',
-      );
-    }
+  // Search Operations
+  async findPaginated(params: VendorPaginationParams) {
+    return this.vendorSearchService.findPaginated(params);
   }
 
-  private async getProductTypes(vendorId: string): Promise<ProductType[]> {
-    const ProductModel = this.vendorModel.db.model('ProductSchemaClass');
-
-    const products = await ProductModel.find({
-      vendorId: vendorId,
-      productStatus: 'PUBLISHED',
-    })
-      .lean()
-      .exec();
-
-    return Array.from(new Set(products.map((product) => product.productType)));
+  async findNearby(lat: number, lng: number, radius?: number) {
+    return this.vendorSearchService.findNearby(lat, lng, radius);
   }
 
-  async updateVendorTypes(vendorId: string, vendorTypes?: VendorType[]) {
-    try {
-      // If vendorTypes not provided, fetch from products
-      if (!vendorTypes) {
-        vendorTypes = await this.getProductTypes(vendorId);
-      }
-
-      const updatedVendor = await this.vendorModel
-        .findByIdAndUpdate(
-          vendorId,
-          {
-            vendorTypes: Array.from(new Set(vendorTypes)),
-            updatedAt: new Date(),
-          },
-          { new: true },
-        )
-        .lean();
-
-      if (!updatedVendor) {
-        throw new NotFoundException(`Vendor with ID ${vendorId} not found`);
-      }
-
-      return this.transformVendorResponse(updatedVendor);
-    } catch (error) {
-      console.error(
-        `Error updating vendor types for vendor ${vendorId}:`,
-        error,
-      );
-      throw error;
-    }
+  async findByType(type: VendorType) {
+    return this.vendorSearchService.findByType(type);
   }
 
-  private transformVendorResponse(vendor: Record<string, any>) {
-    return {
-      _id: vendor._id.toString(),
-      businessName: vendor.businessName,
-      description: vendor.description,
-      vendorTypes: vendor.vendorTypes || [],
-      website: vendor.website,
-      email: vendor.email,
-      phone: vendor.phone,
-      address: vendor.address,
-      city: vendor.city,
-      state: vendor.state,
-      postalCode: vendor.postalCode,
-      location: {
-        type: 'Point' as const,
-        coordinates: [vendor.longitude, vendor.latitude] as [number, number],
-      },
-      logoUrl: vendor.logoUrl,
-      vendorStatus: vendor.vendorStatus,
-      actionNeeded: vendor.actionNeeded,
-      adminNotes: vendor.adminNotes,
-      createdAt: vendor.createdAt?.toISOString(),
-      updatedAt: vendor.updatedAt?.toISOString(),
-    };
+  async findByPostalCode(postalCode: string, page?: number, pageSize?: number) {
+    return this.vendorSearchService.findByPostalCode(postalCode, page, pageSize);
   }
 
-  // Version 1 Start
-  async findPaginated(
-    params: VendorPaginationParams,
-  ): Promise<PaginatedVendorResponse> {
-    try {
-      const query = this.buildPaginationQuery(params);
-      const sortOptions = this.buildSortOptions(params);
-
-      const totalDocs = await this.vendorModel.countDocuments(query);
-      const totalPages = Math.ceil(totalDocs / params.pageSize);
-
-      let vendors = await this.vendorModel
-        .find(query)
-        .sort(sortOptions)
-        .skip((params.page - 1) * params.pageSize)
-        .limit(params.pageSize)
-        .lean()
-        .exec();
-
-      // Special handling for location-based sorting
-      if (params.latitude && params.longitude) {
-        vendors = await this.sortByDistance(vendors, params);
-      }
-
-      return {
-        data: vendors.map((vendor) => this.transformVendorResponse(vendor)),
-        total: totalDocs,
-        page: params.page,
-        pageSize: params.pageSize,
-        totalPages,
-        hasNextPage: params.page < totalPages,
-        hasPreviousPage: params.page > 1,
-      };
-    } catch (error) {
-      console.error('Error in findPaginated:', error);
-      throw new InternalServerErrorException(
-        'Failed to fetch paginated vendors',
-      );
-    }
-  }
-
-  private buildPaginationQuery(params: VendorPaginationParams): any {
-    const query: any = {};
-
-    // Add status filter if provided
-    if (params.status) {
-      query.vendorStatus = params.status;
-    }
-
-    // Add type filter if provided
-    if (params.type) {
-      query.vendorTypes = params.type;
-    }
-
-    // Add location filters if provided
-    if (params.city) {
-      query.city = new RegExp(params.city, 'i');
-    }
-
-    if (params.state) {
-      query.state = new RegExp(params.state, 'i');
-    }
-
-    if (params.postalCode) {
-      query.postalCode = new RegExp(params.postalCode, 'i');
-    }
-
-    // Add search filter if provided
-    if (params.search) {
-      query.$or = [
-        { businessName: new RegExp(params.search, 'i') },
-        { description: new RegExp(params.search, 'i') },
-      ];
-    }
-
-    return query;
-  }
-
-  private buildSortOptions(params: VendorPaginationParams): any {
-    // Don't apply MongoDB sort if we're doing distance-based sorting
-    if (params.latitude && params.longitude) {
-      return {};
-    }
-
-    const sortOrder = params.sortOrder === SortOrder.DESC ? -1 : 1;
-    return { [params.sortField]: sortOrder };
-  }
-
-  private sortByDistance(
-    vendors: any[],
-    params: VendorPaginationParams,
-  ): any[] {
-    if (!params.latitude || !params.longitude) {
-      return vendors;
-    }
-    return vendors.sort((a, b) => {
-      const distA = calculateDistance(
-        params.latitude!,
-        params.longitude!,
-        a.latitude,
-        a.longitude,
-      );
-      const distB = calculateDistance(
-        params.latitude!,
-        params.longitude!,
-        b.latitude,
-        b.longitude,
-      );
-      return distA - distB;
-    });
-  }
-
-  async findByPostalCode(
-    postalCode: string,
-    page: number = 1,
-    pageSize: number = 10,
-  ): Promise<PaginatedVendorResponse> {
-    return this.findPaginated({
-      page,
-      pageSize,
-      sortField: VendorSortField.NAME,
-      sortOrder: SortOrder.ASC,
-      postalCode,
-    });
-  }
-
-  async searchByName(
-    name: string,
-    page: number = 1,
-    pageSize: number = 10,
-  ): Promise<PaginatedVendorResponse> {
-    return this.findPaginated({
-      page,
-      pageSize,
-      sortField: VendorSortField.NAME,
-      sortOrder: SortOrder.ASC,
-      search: name,
-    });
+  async searchByName(name: string, page?: number, pageSize?: number) {
+    return this.vendorSearchService.searchByName(name, page, pageSize);
   }
 
   async findNearLocation(
-    latitude: number,
-    longitude: number,
-    page: number = 1,
-    pageSize: number = 10,
-  ): Promise<PaginatedVendorResponse> {
-    return this.findPaginated({
-      page,
-      pageSize,
-      sortField: VendorSortField.NAME,
-      sortOrder: SortOrder.ASC,
-      latitude,
-      longitude,
-    });
+    latitude: number, 
+    longitude: number, 
+    page: number = 1, 
+    pageSize: number = 10
+  ) {
+    return this.vendorSearchService.findNearLocation(latitude, longitude, page, pageSize);
+  }
+
+  // Stripe Operations
+  async updateStripeConnectId(vendorId: string, stripeConnectId: string) {
+    return this.vendorStripeService.updateStripeConnectId(vendorId, stripeConnectId);
+  }
+
+  async updateStripeStatus(id: string, stripeData: any) {
+    return this.vendorStripeService.updateStripeStatus(id, stripeData);
+  }
+
+  async getStripeStatus(id: string) {
+    return this.vendorStripeService.getStripeStatus(id);
+  }
+
+  async triggerPayout(vendorId: string) {
+    return this.vendorStripeService.triggerPayout(vendorId);
+  }
+
+  // Owner Operations
+  async findVendorsOwnedByUser(userId: string) {
+    return this.vendorOwnerService.findVendorsOwnedByUser(userId);
+  }
+
+  async findAllVendorsForUser(userId: string) {
+    return this.vendorOwnerService.findAllVendorsForUser(userId);
+  }
+
+  async getVendorOwners(id: string) {
+    return this.vendorOwnerService.getVendorOwners(id);
+  }
+
+  async approveVendor(vendorId: string, userId: string) {
+    return this.vendorOwnerService.approveVendor(vendorId, userId);
+  }
+
+  async isUserAssociatedWithVendor(userId: string, vendorId: string) {
+    return this.vendorOwnerService.isUserAssociatedWithVendor(userId, vendorId);
+  }
+
+  async removeUserFromVendors(userId: string) {
+    return this.vendorOwnerService.removeUserFromVendors(userId);
+  }
+
+  // Product Operations
+  async updateVendorTypes(vendorId: string, vendorTypes?: VendorType[]) {
+    return this.vendorProductService.updateVendorTypes(vendorId, vendorTypes);
+  }
+
+  async syncVendorTypesWithProducts(vendorId: string) {
+    return this.vendorProductService.syncVendorTypesWithProducts(vendorId);
+  }
+
+  async getProductCounts(vendorId: string) {
+    return this.vendorProductService.getProductCounts(vendorId);
+  }
+
+  async validateProductType(vendorId: string, productType: VendorType) {
+    return this.vendorProductService.validateProductType(vendorId, productType);
+  }
+
+  async getVendorProductStats(vendorId: string) {
+    return this.vendorProductService.getVendorProductStats(vendorId);
   }
 }

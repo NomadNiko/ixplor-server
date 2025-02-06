@@ -27,6 +27,7 @@ private transformCartResponse(cart: any) {
       productName: item.productName,
       productDate: item.productDate ? new Date(item.productDate).toISOString() : undefined,
       productStartTime: item.productStartTime,
+      vendorId: item.vendorId
     })) || [],
     total: cart.total || 0,
     createdAt: cart.createdAt ? new Date(cart.createdAt).toISOString() : undefined,
@@ -47,7 +48,7 @@ async getCart(userId: string) {
 }
 
 async addToCart(userId: string, addToCartDto: AddToCartDto) {
-  const { productId, quantity, productDate, productStartTime } = addToCartDto;
+  const { productId, quantity, productDate, productStartTime, vendorId } = addToCartDto;
   
   const product = await this.productService.findById(productId);
   if (!product || !product.data) {
@@ -75,6 +76,7 @@ async addToCart(userId: string, addToCartDto: AddToCartDto) {
       quantity,
       price: product.data.productPrice,
       productName: product.data.productName,
+      vendorId,
       productDate,
       productStartTime,
     });

@@ -1,5 +1,3 @@
-// ./ixplor-server/src/vendors/vendor.controller.ts
-
 import {
   Controller,
   Get,
@@ -11,24 +9,34 @@ import {
   Query,
   UseGuards,
   BadRequestException,
-  UnauthorizedException,
   Request,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { VendorService } from './vendor.service';
 import { VendorType } from './infrastructure/persistence/document/entities/vendor.schema';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { CreateVendorDto } from './dto/create-vendor.dto';
 import { UpdateVendorDto } from './dto/update-vendor.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../roles/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { RoleEnum } from '../roles/roles.enum';
-import { VendorStatusEnum } from './infrastructure/persistence/document/entities/vendor.schema';
+import { StripeBalanceResponseDto } from 'src/stripe-connect/dto/stripe-balance.dto';
+import { VendorStripeService } from './services/vendor-stripe.service';
+
 
 @ApiTags('Vendors')
 @Controller('vendors')
 export class VendorController {
-  constructor(private readonly vendorService: VendorService) {}
+  constructor(
+    private readonly vendorStripeService: VendorStripeService,
+    private readonly vendorService: VendorService
+  ) {}
 
   @Get()
   async findAll() {
@@ -84,6 +92,16 @@ export class VendorController {
     return this.vendorService.create(createVendorDto, req.user.id);
   }
 
+  @Post(':id/stripe-connect')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Update vendor Stripe Connect ID' })
+  async updateStripeConnectId(
+    @Param('id') id: string,
+    @Body() body: { stripeConnectId: string },
+  ) {
+    return this.vendorService.updateStripeConnectId(id, body.stripeConnectId);
+  }
+
   @Post('admin/approve/:vendorId/:userId')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(RoleEnum.admin)
@@ -94,18 +112,30 @@ export class VendorController {
     return this.vendorService.approveVendor(vendorId, userId);
   }
 
-  @Get('admin/user/:userId/vendors')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(RoleEnum.admin)
-  async findAllVendorsForUser(@Param('userId') userId: string) {
-    return this.vendorService.findAllVendorsForUser(userId);
+  @Post('payout/:id')
+@UseGuards(AuthGuard('jwt'))
+@ApiOperation({ summary: 'Trigger payout for vendor' })
+@ApiResponse({
+  status: 200,
+  description: 'Payout initiated successfully',
+})
+async triggerPayout(
+  @Param('id') id: string,
+  @Request() req,
+) {
+  // Verify user has permission to trigger payout for this vendor
+  const hasPermission = await this.vendorService.isUserAssociatedWithVendor(req.user.id, id);
+  if (!hasPermission) {
+    throw new UnauthorizedException('Not authorized to trigger payout for this vendor');
   }
+  return this.vendorService.triggerPayout(id);
+}
 
   @Put(':id')
   @UseGuards(AuthGuard('jwt'))
   async update(
     @Param('id') id: string,
-    @Body() updateVendorDto: UpdateVendorDto
+    @Body() updateVendorDto: UpdateVendorDto,
   ) {
     return this.vendorService.update(id, updateVendorDto);
   }
@@ -115,16 +145,31 @@ export class VendorController {
   async remove(@Param('id') id: string) {
     return this.vendorService.remove(id);
   }
+  @Post(':id/stripe-balance')
+  @ApiOperation({ summary: 'Retrieve and update Stripe account balance' })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved and updated Stripe balance',
+    type: StripeBalanceResponseDto
+  })
+  async updateStripeBalance(
+    @Param('id') vendorId: string,
+    @Request() req
+  ): Promise<StripeBalanceResponseDto> {
+    // Check if user is an admin
+    const isAdmin = req.user.role.id === RoleEnum.admin;
 
-  @Get('user/:userId/owned')
-  @UseGuards(AuthGuard('jwt'))
-  async findVendorsOwnedByUser(
-    @Param('userId') userId: string,
-    @Request() req,
-  ) {
-    if (req.user.id !== userId) {
-      throw new UnauthorizedException("Cannot access other users' vendor data");
+    // Check if user is associated with the vendor
+    const isVendorOwner = await this.vendorService.isUserAssociatedWithVendor(
+      req.user.id, 
+      vendorId
+    );
+
+    // Allow access only to admins or vendor owners
+    if (!isAdmin && !isVendorOwner) {
+      throw new UnauthorizedException('Not authorized to update vendor balance');
     }
-    return this.vendorService.findVendorsOwnedByUser(userId);
+
+    return this.vendorStripeService.retrieveAndUpdateStripeBalance(vendorId);
   }
 }

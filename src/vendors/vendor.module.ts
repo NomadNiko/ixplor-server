@@ -1,8 +1,14 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ConfigModule } from '@nestjs/config';
 import { VendorController } from './vendor.controller';
 import { VendorV1Controller } from './controllers/vendor-v1.controller';
 import { VendorService } from './vendor.service';
+import { VendorCrudService } from './services/vendor-crud.service';
+import { VendorSearchService } from './services/vendor-search.service';
+import { VendorStripeService } from './services/vendor-stripe.service';
+import { VendorOwnerService } from './services/vendor-owner.service';
+import { VendorProductService } from './services/vendor-product.service';
 import {
   VendorSchemaClass,
   VendorSchema,
@@ -11,6 +17,11 @@ import {
   UserSchemaClass,
   UserSchema,
 } from '../users/infrastructure/persistence/document/entities/user.schema';
+import {
+  PayoutSchemaClass,
+  PayoutSchema,
+} from '../payout/infrastructure/persistence/document/entities/payout.schema';
+import { StripeConnectModule } from '../stripe-connect/stripe-connect.module';
 
 @Module({
   imports: [
@@ -22,11 +33,34 @@ import {
       {
         name: UserSchemaClass.name,
         schema: UserSchema,
+      },
+      {
+        name: PayoutSchemaClass.name,
+        schema: PayoutSchema,
       }
     ]),
+    ConfigModule,
+    StripeConnectModule
   ],
-  controllers: [VendorController, VendorV1Controller],
-  providers: [VendorService],
-  exports: [VendorService],
+  controllers: [
+    VendorController,
+    VendorV1Controller
+  ],
+  providers: [
+    VendorService,
+    VendorCrudService,
+    VendorSearchService,
+    VendorStripeService,
+    VendorOwnerService,
+    VendorProductService,
+  ],
+  exports: [
+    VendorService,
+    VendorCrudService,
+    VendorSearchService,
+    VendorStripeService,
+    VendorOwnerService,
+    VendorProductService,
+  ]
 })
 export class VendorModule {}

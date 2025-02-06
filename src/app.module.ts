@@ -32,6 +32,12 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { MongooseConfigService } from './database/mongoose-config.service';
 import { DatabaseConfig } from './database/config/database-config.type';
 import { CartModule } from './cart/cart.module';
+import { StripeConnectModule } from './stripe-connect/stripe-connect.module';
+import { StripeModule } from './stripe/stripe.module';
+import { TransactionModule } from './transactions/transaction.module';
+import { TicketModule } from './tickets/ticket.module';
+import { PaymentModule } from './payment/payment.module';
+import { PayoutModule } from './payout/payout.module';
 
 // <database-block>
 const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
@@ -102,6 +108,12 @@ const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
     MailModule,
     MailerModule,
     HomeModule,
+    TicketModule,
+    StripeConnectModule,
+    StripeModule,
+    PaymentModule,
+    PayoutModule,
+    TransactionModule,
   ],
 })
 export class AppModule {}
