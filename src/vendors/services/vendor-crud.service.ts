@@ -61,11 +61,13 @@ export class VendorCrudService {
         vendorStatus: 'SUBMITTED',
         ownerIds: [userId],
       });
-
-      const vendor = await createdVendor.save();
-
+      
+      const savedVendor = await createdVendor.save();
+      // Convert to plain object before transformation
+      const plainVendor = savedVendor.toObject();
+      
       return {
-        data: transformVendorResponse(vendor),
+        data: transformVendorResponse(plainVendor),
         message: 'Vendor created successfully',
       };
     } catch (error) {
