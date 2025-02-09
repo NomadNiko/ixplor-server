@@ -157,25 +157,38 @@ export class TicketService {
         ticket.statusUpdatedAt = new Date();
         ticket.statusUpdatedBy = updatedBy;
 
+        // Handle redemption specific logic
         if (status === TicketStatus.REDEEMED && oldStatus !== TicketStatus.REDEEMED) {
-          if (ticket.productItemId) {
-            await this.productItemService.updateQuantityForPurchase(
-              ticket.productItemId,
-              ticket.quantity
-            );
+          const vendor = await this.vendorModel.findById(ticket.vendorId).session(session);
+          if (!vendor) {
+            throw new NotFoundException('Vendor not found');
           }
-          await this.paymentService.handleTicketRedemption(id);
+
+          // Calculate vendor's share based on application fee
+          const applicationFee = vendor.vendorApplicationFee || 0.13; // Default to 13% if not set
+          const vendorShare = ticket.productPrice * (1 - applicationFee);
+
+          // Update vendor's internal balance
+          await this.vendorModel.findByIdAndUpdate(
+            ticket.vendorId,
+            { $inc: { internalAccountBalance: vendorShare } },
+            { session }
+          );
         }
 
         const updatedTicket = await ticket.save({ session });
         return this.transformTicket(updatedTicket);
       });
     } catch (error) {
-      throw error;
+      console.error('Error updating ticket status:', error);
+      throw error instanceof Error ?
+        new InternalServerErrorException(error.message) :
+        new InternalServerErrorException('Failed to update ticket status');
     } finally {
       await session.endSession();
     }
   }
+
 
   async updateTicket(
     id: string,
