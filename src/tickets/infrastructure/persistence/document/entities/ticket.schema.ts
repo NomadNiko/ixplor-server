@@ -37,9 +37,8 @@ export class TicketSchemaClass {
   vendorId: string;
 
   @Prop({ required: true })
-  productId: string;
+  productItemId: string;
 
-  // Product snapshot data
   @Prop({ required: true })
   productName: string;
 
@@ -52,14 +51,14 @@ export class TicketSchemaClass {
   @Prop({ required: true })
   productType: string;
 
-  @Prop()
-  productDate?: Date;
+  @Prop({ required: true })
+  productDate: Date;
 
-  @Prop()
-  productStartTime?: string;
+  @Prop({ required: true })
+  productStartTime: string;
 
-  @Prop()
-  productDuration?: number;
+  @Prop({ required: true })
+  productDuration: number;
 
   @Prop({
     type: {
@@ -132,13 +131,11 @@ export class TicketSchemaClass {
   vendorPaid: boolean;
 }
 
-
 export const TicketSchema = SchemaFactory.createForClass(TicketSchemaClass);
 
-// Add indexes
 TicketSchema.index({ userId: 1 });
 TicketSchema.index({ transactionId: 1 });
 TicketSchema.index({ vendorId: 1 });
-TicketSchema.index({ productId: 1 });
+TicketSchema.index({ productItemId: 1 });
 TicketSchema.index({ used: 1 });
-TicketSchema.index({ productLocation: '2dsphere' }); // Add geospatial index
+TicketSchema.index({ productLocation: '2dsphere' });

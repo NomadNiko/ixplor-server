@@ -31,7 +31,7 @@ export class CreateTransactionDto {
 
   @ApiProperty()
   @IsString()
-  productId: string;
+  productItemId: string;
 
   @ApiPropertyOptional({ enum: TransactionStatus })
   @IsEnum(TransactionStatus)

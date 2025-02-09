@@ -174,7 +174,7 @@ export class ProductTemplateService {
       .select('-__v')
       .lean()
       .exec();
-
+      
     return {
       data: templates.map(template => this.transformTemplateResponse(template)),
     };

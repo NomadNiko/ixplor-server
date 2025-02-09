@@ -5,8 +5,9 @@ import { PaymentController } from './payment.controller';
 import { PaymentSchemaClass, PaymentSchema } from './infrastructure/persistence/document/entities/payment.schema';
 import { VendorModule } from '../vendors/vendor.module';
 import { TicketModule } from '../tickets/ticket.module';
-import { VendorSchema, VendorSchemaClass } from 'src/vendors/infrastructure/persistence/document/entities/vendor.schema';
-import { TicketSchema, TicketSchemaClass } from 'src/tickets/infrastructure/persistence/document/entities/ticket.schema';
+import { VendorSchema, VendorSchemaClass } from '../vendors/infrastructure/persistence/document/entities/vendor.schema';
+import { TicketSchema, TicketSchemaClass } from '../tickets/infrastructure/persistence/document/entities/ticket.schema';
+import { ProductItemSchema, ProductItemSchemaClass } from '../product-item/infrastructure/persistence/document/entities/product-item.schema';
 
 @Module({
   imports: [
@@ -15,11 +16,21 @@ import { TicketSchema, TicketSchemaClass } from 'src/tickets/infrastructure/pers
         name: PaymentSchemaClass.name,
         schema: PaymentSchema,
       },
-      { name: VendorSchemaClass.name, schema: VendorSchema },
-      { name: TicketSchemaClass.name, schema: TicketSchema },
+      { 
+        name: VendorSchemaClass.name, 
+        schema: VendorSchema 
+      },
+      { 
+        name: TicketSchemaClass.name, 
+        schema: TicketSchema 
+      },
+      {
+        name: ProductItemSchemaClass.name,
+        schema: ProductItemSchema
+      }
     ]),
     VendorModule,
-    forwardRef(() => TicketModule) // Fix circular dependency
+    forwardRef(() => TicketModule) // Handle circular dependency with TicketModule
   ],
   controllers: [PaymentController],
   providers: [PaymentService],

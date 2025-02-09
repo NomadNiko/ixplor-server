@@ -9,12 +9,14 @@ import {
 import { VendorSchemaClass } from '../vendors/infrastructure/persistence/document/entities/vendor.schema';
 import { PaymentService } from '../payment/payment.service';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
+import { ProductItemService } from 'src/product-item/product-item.service';
 
 @Injectable()
 export class TicketService {
   constructor(
     @InjectModel(TicketSchemaClass.name)
     private readonly ticketModel: Model<TicketDocument>,
+    private readonly productItemService: ProductItemService,
     @InjectModel(VendorSchemaClass.name)
     private readonly vendorModel: Model<VendorSchemaClass>,
     @Inject(forwardRef(() => PaymentService))
@@ -28,7 +30,7 @@ export class TicketService {
       userId: ticketObj.userId,
       transactionId: ticketObj.transactionId,
       vendorId: ticketObj.vendorId,
-      productId: ticketObj.productId,
+      productItemId: ticketObj.productItemId,
       productName: ticketObj.productName,
       productDescription: ticketObj.productDescription,
       productPrice: ticketObj.productPrice,
@@ -58,30 +60,46 @@ export class TicketService {
     };
   }
 
+  
   async createTicket(ticketData: Partial<TicketSchemaClass>): Promise<any> {
-    // Get vendor to calculate fee
-    const vendor = await this.vendorModel.findById(ticketData.vendorId);
-    if (!vendor) {
-      throw new NotFoundException('Vendor not found');
+    const session = await this.ticketModel.db.startSession();
+    try {
+      await session.withTransaction(async () => {
+        const vendor = await this.vendorModel.findById(ticketData.vendorId).session(session);
+        if (!vendor) {
+          throw new NotFoundException('Vendor not found');
+        }
+
+        if (!ticketData.productPrice) {
+          throw new BadRequestException('Product price is required');
+        }
+
+        if (ticketData.productItemId) {
+          const isAvailable = await this.productItemService.validateAvailability(
+            ticketData.productItemId,
+            ticketData.quantity || 1
+          );
+          if (!isAvailable) {
+            throw new BadRequestException('Product item is no longer available');
+          }
+        }
+
+        const vendorOwed = ticketData.productPrice * (1 - (vendor.vendorApplicationFee || 0.13));
+        const ticket = new this.ticketModel({
+          ...ticketData,
+          vendorOwed,
+          vendorPaid: false,
+          status: TicketStatus.ACTIVE
+        });
+
+        const savedTicket = await ticket.save({ session });
+        return this.transformTicket(savedTicket);
+      });
+    } catch (error) {
+      throw error;
+    } finally {
+      await session.endSession();
     }
-
-    if (!ticketData.productPrice) {
-      throw new BadRequestException('Product price is required');
-    }
-
-    // Calculate vendor owed amount (price minus application fee)
-    const vendorOwed = ticketData.productPrice * (1 - (vendor.vendorApplicationFee || 0.13));
-
-    // Create ticket with vendorOwed amount
-    const ticket = new this.ticketModel({
-      ...ticketData,
-      vendorOwed,
-      vendorPaid: false,
-      status: TicketStatus.ACTIVE
-    });
-
-    const savedTicket = await ticket.save();
-    return this.transformTicket(savedTicket);
   }
 
   async findByVendorId(vendorId: string) {
@@ -98,6 +116,7 @@ export class TicketService {
       throw new InternalServerErrorException('Failed to fetch vendor tickets');
     }
   }
+
   async findByUserId(userId: string) {
     const tickets = await this.ticketModel
       .find({ userId })
@@ -124,25 +143,38 @@ export class TicketService {
       updatedBy: string;
     }
   ) {
-    const ticket = await this.ticketModel.findById(id);
-    if (!ticket) {
-      throw new NotFoundException('Ticket not found');
+    const session = await this.ticketModel.db.startSession();
+    try {
+      return await session.withTransaction(async () => {
+        const ticket = await this.ticketModel.findById(id).session(session);
+        if (!ticket) {
+          throw new NotFoundException('Ticket not found');
+        }
+
+        const oldStatus = ticket.status;
+        ticket.status = status;
+        ticket.statusUpdateReason = reason;
+        ticket.statusUpdatedAt = new Date();
+        ticket.statusUpdatedBy = updatedBy;
+
+        if (status === TicketStatus.REDEEMED && oldStatus !== TicketStatus.REDEEMED) {
+          if (ticket.productItemId) {
+            await this.productItemService.updateQuantityForPurchase(
+              ticket.productItemId,
+              ticket.quantity
+            );
+          }
+          await this.paymentService.handleTicketRedemption(id);
+        }
+
+        const updatedTicket = await ticket.save({ session });
+        return this.transformTicket(updatedTicket);
+      });
+    } catch (error) {
+      throw error;
+    } finally {
+      await session.endSession();
     }
-
-    const oldStatus = ticket.status;
-    ticket.status = status;
-    ticket.statusUpdateReason = reason;
-    ticket.statusUpdatedAt = new Date();
-    ticket.statusUpdatedBy = updatedBy;
-
-    const updatedTicket = await ticket.save();
-
-    // If status changed to REDEEMED, trigger payment processing
-    if (status === TicketStatus.REDEEMED && oldStatus !== TicketStatus.REDEEMED) {
-      await this.paymentService.handleTicketRedemption(id);
-    }
-
-    return this.transformTicket(updatedTicket);
   }
 
   async updateTicket(
@@ -169,21 +201,30 @@ export class TicketService {
   }
 
   async markTicketAsUsed(ticketId: string) {
-    const ticket = await this.ticketModel.findById(ticketId);
-    
-    if (!ticket) {
-      throw new NotFoundException('Ticket not found');
-    }
+    const session = await this.ticketModel.db.startSession();
+    try {
+      return await session.withTransaction(async () => {
+        const ticket = await this.ticketModel.findById(ticketId).session(session);
+        
+        if (!ticket) {
+          throw new NotFoundException('Ticket not found');
+        }
 
-    if (ticket.used) {
-      throw new BadRequestException('Ticket has already been used');
-    }
+        if (ticket.used) {
+          throw new BadRequestException('Ticket has already been used');
+        }
 
-    ticket.used = true;
-    ticket.usedAt = new Date();
-    
-    const updatedTicket = await ticket.save();
-    return this.transformTicket(updatedTicket);
+        ticket.used = true;
+        ticket.usedAt = new Date();
+        
+        const updatedTicket = await ticket.save({ session });
+        return this.transformTicket(updatedTicket);
+      });
+    } catch (error) {
+      throw error;
+    } finally {
+      await session.endSession();
+    }
   }
 
   async findPendingPaymentTickets(vendorId: string) {

@@ -9,19 +9,20 @@ import {
   TransactionStatus,
   TransactionType,
 } from '../transactions/infrastructure/persistence/document/entities/transaction.schema';
-import { CartItemClass } from 'src/cart/entities/cart.schema';
-import { CartService } from 'src/cart/cart.service';
-import { ProductService } from 'src/products/product.service';
-import { TicketService } from 'src/tickets/ticket.service';
+import { CartItemClass } from '../cart/entities/cart.schema';
+import { CartService } from '../cart/cart.service';
+import { ProductItemService } from '../product-item/product-item.service';
+import { TicketService } from '../tickets/ticket.service';
 import { PayoutSchemaClass } from '../payout/infrastructure/persistence/document/entities/payout.schema';
 import { PayoutStatus } from '../payout/infrastructure/persistence/document/entities/payout.schema';
+
 interface StripeSessionWithClientSecret extends Stripe.Checkout.Session {
   client_secret?: string;
 }
 
-interface ExtendedSessionCreateParams
-  extends Stripe.Checkout.SessionCreateParams {
-  ui_mode?: 'hosted' | 'embedded';
+interface EmbeddedCheckoutParams extends Omit<Stripe.Checkout.SessionCreateParams, 'success_url' | 'cancel_url'> {
+  ui_mode: 'embedded';
+  return_url: string;
 }
 
 @Injectable()
@@ -35,12 +36,11 @@ export class StripeService {
     private transactionService: TransactionService,
     private vendorService: VendorService,
     private cartService: CartService,
-    private productService: ProductService,
+    private productItemService: ProductItemService,
     private ticketService: TicketService,
   ) {
     this.stripe = new Stripe(
-      this.configService.get<string>('STRIPE_SECRET_KEY', { infer: true }) ??
-        '',
+      this.configService.get<string>('STRIPE_SECRET_KEY', { infer: true }) ?? '',
       {
         apiVersion: '2023-08-16',
       },
@@ -59,6 +59,16 @@ export class StripeService {
     try {
       if (!Array.isArray(items) || items.length === 0) {
         throw new Error('Invalid or empty items array');
+      }
+
+      for (const item of items) {
+        const isAvailable = await this.productItemService.validateAvailability(
+          item.productItemId,
+          item.quantity
+        );
+        if (!isAvailable) {
+          throw new Error(`Product item ${item.productItemId} is no longer available in requested quantity`);
+        }
       }
 
       const totalAmount = items.reduce((sum, item) => {
@@ -83,14 +93,28 @@ export class StripeService {
         throw new Error('Vendor not configured for payments');
       }
 
-      const session = await this.stripe.checkout.sessions.create({
+      // Create compact metadata for Stripe
+      const compactItemsMetadata = items.map(item => ({
+        id: item.productItemId,
+        q: item.quantity,
+        d: new Date(item.productDate).toISOString().split('T')[0],
+        t: item.productStartTime
+      }));
+
+      // Create session parameters
+      const sessionParams: EmbeddedCheckoutParams = {
         ui_mode: 'embedded',
-        return_url: `${returnUrl}?session_id={CHECKOUT_SESSION_ID}`,
+        return_url: returnUrl,
         line_items: items.map((item) => ({
           price_data: {
             currency: 'usd',
             product_data: {
               name: item.productName,
+              metadata: {
+                id: item.productItemId,
+                date: new Date(item.productDate).toISOString().split('T')[0],
+                time: item.productStartTime
+              }
             },
             unit_amount: Math.round(item.price * 100),
           },
@@ -100,16 +124,8 @@ export class StripeService {
         metadata: {
           customerId,
           vendorId: firstItem.vendorId,
-          items: JSON.stringify(
-            items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              price: item.price,
-              productName: item.productName,
-              productDate: item.productDate,
-              productStartTime: item.productStartTime,
-            })),
-          ),
+          itemCount: items.length.toString(),
+          items: JSON.stringify(compactItemsMetadata)
         },
         payment_intent_data: {
           metadata: {
@@ -117,19 +133,24 @@ export class StripeService {
             vendorId: firstItem.vendorId,
           },
         },
-      } as unknown as ExtendedSessionCreateParams);
+      };
 
-      // Create initial transaction record
+      // Create the session
+      const session = await this.stripe.checkout.sessions.create(
+        sessionParams as unknown as Stripe.Checkout.SessionCreateParams
+      );
+
+      // Create transaction record
       await this.transactionService.create({
         stripeCheckoutSessionId: session.id,
         amount: totalAmount,
         currency: 'usd',
         vendorId: firstItem.vendorId,
         customerId,
-        productId: firstItem.productId,
+        productItemIds: items.map(item => item.productItemId),
         description: `Payment for ${items.length} item(s)`,
         metadata: {
-          items: session.metadata?.items,
+          items: JSON.stringify(items),
           returnUrl,
         },
         status: TransactionStatus.PENDING,
@@ -137,8 +158,7 @@ export class StripeService {
       });
 
       return {
-        clientSecret:
-          (session as StripeSessionWithClientSecret).client_secret ?? '',
+        clientSecret: (session as StripeSessionWithClientSecret).client_secret ?? '',
       };
     } catch (error) {
       console.error('Error creating checkout session:', error);
@@ -152,9 +172,7 @@ export class StripeService {
 
   async handleWebhookEvent(signature: string, payload: any) {
     try {
-      // Skip signature verification and directly process the event
       const event = typeof payload === 'string' ? JSON.parse(payload) : payload;
-
       console.log('Processing webhook event type:', event.type);
 
       switch (event.type) {
@@ -163,21 +181,17 @@ export class StripeService {
             event.data.object as Stripe.Checkout.Session,
           );
           break;
-
         case 'payment_intent.payment_failed':
           await this.handlePaymentFailed(
             event.data.object as Stripe.PaymentIntent,
           );
           break;
-
         case 'transfer.created':
           await this.handleTransferCreated(event.data.object);
           break;
-
         case 'charge.refunded':
           await this.handleRefund(event.data.object as Stripe.Charge);
           break;
-
         case 'charge.dispute.created':
           await this.handleDisputeCreated(event.data.object as Stripe.Dispute);
           break;
@@ -190,10 +204,9 @@ export class StripeService {
     }
   }
 
-  private async handleCheckoutSessionCompleted(
-    session: Stripe.Checkout.Session,
-  ) {
+  private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
     try {
+      // 1. Update transaction status
       await this.transactionService.updateTransactionStatus(
         session.id,
         TransactionStatus.SUCCEEDED,
@@ -201,48 +214,77 @@ export class StripeService {
           receiptEmail: session.customer_email || undefined,
         },
       );
-
-      if (session.metadata?.customerId && session.metadata?.items) {
-        const items = JSON.parse(session.metadata.items);
-        const customerId = session.metadata.customerId;
-
-        for (const item of items) {
-          const product = await this.productService.findById(item.productId);
-          
-          if (product?.data) {
-            // Create individual tickets based on quantity
-            for (let i = 0; i < item.quantity; i++) {
-              await this.ticketService.createTicket({
-                userId: customerId,
-                transactionId: session.id,
-                vendorId: product.data.vendorId,
-                productId: item.productId,
-                productName: product.data.productName,
-                productDescription: product.data.productDescription,
-                productPrice: product.data.productPrice,
-                productType: product.data.productType,
-                productDate: product.data.productDate,
-                productStartTime: product.data.productStartTime,
-                productDuration: product.data.productDuration,
-                productLocation: product.data.location,
-                productImageURL: product.data.productImageURL,
-                productAdditionalInfo: product.data.productAdditionalInfo,
-                productRequirements: product.data.productRequirements,
-                productWaiver: product.data.productWaiver,
-                quantity: 1, // Each ticket represents one item
-              });
-            }
-          }
-        }
-        await this.cartService.deleteCart(customerId);
+  
+      if (!session.metadata?.customerId || !session.metadata?.items) {
+        throw new Error('Missing required metadata in checkout session');
       }
+  
+      const customerId = session.metadata.customerId;
+      const items = JSON.parse(session.metadata.items) as Array<{
+        id: string;
+        q: number;
+        d: string;
+        t: string;
+      }>;
+  
+      // 2. Process each item
+      for (const item of items) {
+        // Check product availability
+        const productItem = await this.productItemService.findById(item.id);
+        if (!productItem?.data) {
+          console.error(`Product item ${item.id} not found`);
+          continue;
+        }
+  
+        try {
+          // Update product quantity
+          await this.productItemService.updateQuantityForPurchase(
+            item.id,
+            item.q
+          );
+  
+          // Create tickets for each quantity
+          for (let i = 0; i < item.q; i++) {
+            await this.ticketService.createTicket({
+              userId: customerId,
+              transactionId: session.id,
+              vendorId: productItem.data.vendorId,
+              productItemId: item.id,
+              productName: productItem.data.templateName,
+              productDescription: productItem.data.description,
+              productPrice: productItem.data.price,
+              productType: productItem.data.productType,
+              productDate: new Date(item.d),
+              productStartTime: item.t,
+              productDuration: productItem.data.duration,
+              productLocation: productItem.data.location,
+              productImageURL: productItem.data.imageURL,
+              productAdditionalInfo: productItem.data.additionalInfo,
+              productRequirements: productItem.data.requirements,
+              productWaiver: productItem.data.waiver,
+              quantity: 1,
+            });
+          }
+        } catch (error) {
+          console.error(`Error processing item ${item.id}:`, error);
+          // Continue processing other items even if one fails
+        }
+      }
+  
+      // 3. Clear the cart
+      try {
+        await this.cartService.deleteCart(customerId);
+      } catch (error) {
+        console.error('Error clearing cart:', error);
+        // Don't throw error here as the main purchase process succeeded
+      }
+  
     } catch (error) {
       console.error('Error processing successful checkout:', error);
       throw error;
     }
   }
-
-
+  
   private async handlePaymentFailed(paymentIntent: Stripe.PaymentIntent) {
     await this.transactionService.updateTransactionStatus(
       paymentIntent.id,
@@ -297,7 +339,6 @@ export class StripeService {
 
   async handleTransferCreated(transfer: Stripe.Transfer) {
     try {
-      // Find the payout record using the transfer ID
       const payout = await this.payoutModel.findOne({
         'stripeTransferDetails.transferId': transfer.id,
       });
@@ -307,20 +348,17 @@ export class StripeService {
         return;
       }
 
-      // Update the payout record
       const updatedPayout = await this.payoutModel.findByIdAndUpdate(
         payout._id,
         {
           status: PayoutStatus.SUCCEEDED,
-          'stripeTransferDetails.destinationPayment':
-            transfer.destination_payment,
-          processedAt: new Date(transfer.created * 1000), // Convert Unix timestamp to Date
+          'stripeTransferDetails.destinationPayment': transfer.destination_payment,
+          processedAt: new Date(transfer.created * 1000),
           updatedAt: new Date(),
         },
         { new: true },
       );
 
-      // Log success
       console.log(
         `Payout ${payout._id} updated to SUCCEEDED status for transfer ${transfer.id}`,
       );

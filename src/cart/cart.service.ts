@@ -1,146 +1,150 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { CartClass, CartDocument } from './entities/cart.schema';
-import { AddToCartDto, UpdateCartItemDto } from './dto/cart.dto';
-import { ProductService } from '../products/product.service';
+import { CartSchemaClass, CartItemClass } from './entities/cart.schema';
+import { AddToCartData, UpdateCartItemData } from './types/cart.types';
+import { ProductItemService } from '../product-item/product-item.service';
 
 @Injectable()
 export class CartService {
-constructor(
-  @InjectModel(CartClass.name)
-  private readonly cartModel: Model<CartDocument>,
-  private readonly productService: ProductService,
-) {}
+  constructor(
+    @InjectModel(CartSchemaClass.name)
+    private readonly cartModel: Model<CartSchemaClass>,
+    private readonly productItemService: ProductItemService,
+  ) {}
 
-private transformCartResponse(cart: any) {
-  return {
-    _id: cart._id?.toString(),
-    userId: cart.userId,
-    items: cart.items?.map(item => ({
-      productId: item.productId,
-      quantity: item.quantity,
-      price: item.price,
-      productName: item.productName,
-      productDate: item.productDate ? new Date(item.productDate).toISOString() : undefined,
-      productStartTime: item.productStartTime,
-      vendorId: item.vendorId
-    })) || [],
-    total: cart.total || 0,
-    createdAt: cart.createdAt ? new Date(cart.createdAt).toISOString() : undefined,
-    updatedAt: cart.updatedAt ? new Date(cart.updatedAt).toISOString() : undefined,
-  };
-}
-
-async getCart(userId: string) {
-  const cart = await this.cartModel.findOne({ userId }).lean();
-  if (!cart) {
+  private transformCartResponse(cart: any) {
     return {
-      userId,
-      items: [],
-      total: 0,
+      _id: cart._id.toString(),
+      userId: cart.userId,
+      items: cart.items.map((item: any) => ({
+        _id: item._id.toString(),
+        productItemId: item.productItemId,
+        productName: item.productName,
+        price: item.price,
+        quantity: item.quantity,
+        productDate: item.productDate?.toISOString(),
+        productStartTime: item.productStartTime,
+        productDuration: item.productDuration,
+        vendorId: item.vendorId,
+        createdAt: item.createdAt?.toISOString(),
+        updatedAt: item.updatedAt?.toISOString()
+      })),
+      createdAt: cart.createdAt?.toISOString(),
+      updatedAt: cart.updatedAt?.toISOString()
     };
   }
-  return this.transformCartResponse(cart);
-}
 
-async addToCart(userId: string, addToCartDto: AddToCartDto) {
-  const { productId, quantity, productDate, productStartTime, vendorId } = addToCartDto;
+  async addToCart(addToCartData: AddToCartData) {
+    const { userId, productItemId, quantity } = addToCartData;
+
+    const isAvailable = await this.productItemService.validateAvailability(
+      productItemId,
+      quantity
+    );
+
+    if (!isAvailable) {
+      throw new BadRequestException('Product item is not available in requested quantity');
+    }
+
+    let cart = await this.cartModel.findOne({ userId });
+
+    if (!cart) {
+      cart = new this.cartModel({
+        userId,
+        items: [],
+      });
+    }
+
+    const existingItemIndex = cart.items.findIndex(
+      item => item.productItemId === productItemId
+    );
+
+    if (existingItemIndex > -1) {
+      cart.items[existingItemIndex].quantity += quantity;
+    } else {
+      cart.items.push({
+        productItemId: addToCartData.productItemId,
+        productName: addToCartData.productName,
+        price: addToCartData.price,
+        quantity: addToCartData.quantity,
+        productDate: addToCartData.productDate,
+        productStartTime: addToCartData.productStartTime,
+        productDuration: addToCartData.productDuration,
+        vendorId: addToCartData.vendorId
+      });
+    }
+
+    const savedCart = await cart.save();
+    return this.transformCartResponse(savedCart);
+  }
+
+  async updateCartItem(
+    userId: string,
+    productItemId: string,
+    updateData: UpdateCartItemData
+  ) {
+    const cart = await this.cartModel.findOne({ userId });
+    
+    if (!cart) {
+      throw new NotFoundException('Cart not found');
+    }
+
+    const itemIndex = cart.items.findIndex(
+      item => item.productItemId === productItemId
+    );
+
+    if (itemIndex === -1) {
+      throw new NotFoundException('Item not found in cart');
+    }
+
+    const isAvailable = await this.productItemService.validateAvailability(
+      productItemId,
+      updateData.quantity
+    );
+
+    if (!isAvailable) {
+      throw new BadRequestException('Requested quantity is not available');
+    }
+
+    cart.items[itemIndex].quantity = updateData.quantity;
+    const savedCart = await cart.save();
+    return this.transformCartResponse(savedCart);
+  }
+
+
   
-  const product = await this.productService.findById(productId);
-  if (!product || !product.data) {
-    throw new NotFoundException('Product not found');
+  async removeFromCart(userId: string, productItemId: string) {
+    const cart = await this.cartModel.findOne({ userId });
+    
+    if (!cart) {
+      throw new NotFoundException('Cart not found');
+    }
+
+    cart.items = cart.items.filter(item => item.productItemId !== productItemId);
+    const savedCart = await cart.save();
+    return this.transformCartResponse(savedCart);
   }
 
-  let cart = await this.cartModel.findOne({ userId });
-  if (!cart) {
-    cart = new this.cartModel({
-      userId,
-      items: [],
-      total: 0
-    });
+  async getCart(userId: string) {
+    const cart = await this.cartModel.findOne({ userId });
+    return cart ? this.transformCartResponse(cart) : { userId, items: [] };
   }
 
-  const existingItemIndex = cart.items.findIndex(
-    item => item.productId === productId
-  );
+  async clearCart(userId: string) {
+    const cart = await this.cartModel.findOne({ userId });
+    
+    if (!cart) {
+      return { userId, items: [] };
+    }
 
-  if (existingItemIndex > -1) {
-    cart.items[existingItemIndex].quantity += quantity;
-  } else {
-    cart.items.push({
-      productId,
-      quantity,
-      price: product.data.productPrice,
-      productName: product.data.productName,
-      vendorId,
-      productDate,
-      productStartTime,
-    });
+    cart.items = [];
+    const savedCart = await cart.save();
+    return this.transformCartResponse(savedCart);
   }
 
-  const savedCart = await cart.save();
-  return this.transformCartResponse(savedCart.toObject());
-}
-
-async updateCartItem(userId: string, updateCartItemDto: UpdateCartItemDto) {
-  const { productId, quantity } = updateCartItemDto;
-  
-  const cart = await this.cartModel.findOne({ userId });
-  if (!cart) {
-    throw new NotFoundException('Cart not found');
+  async deleteCart(userId: string) {
+    const cart = await this.cartModel.findOneAndDelete({ userId });
+    return cart ? this.transformCartResponse(cart) : { userId, items: [] };
   }
-
-  const itemIndex = cart.items.findIndex(item => item.productId === productId);
-  if (itemIndex === -1) {
-    throw new NotFoundException('Item not found in cart');
-  }
-
-  if (quantity === 0) {
-    cart.items.splice(itemIndex, 1);
-  } else {
-    cart.items[itemIndex].quantity = quantity;
-  }
-
-  const updatedCart = await cart.save();
-  return this.transformCartResponse(updatedCart.toObject());
-}
-
-async removeFromCart(userId: string, productId: string) {
-  const cart = await this.cartModel.findOne({ userId });
-  if (!cart) {
-    throw new NotFoundException('Cart not found');
-  }
-
-  const itemIndex = cart.items.findIndex(item => item.productId === productId);
-  if (itemIndex === -1) {
-    throw new NotFoundException('Item not found in cart');
-  }
-
-  cart.items.splice(itemIndex, 1);
-  const updatedCart = await cart.save();
-  return this.transformCartResponse(updatedCart.toObject());
-}
-
-async clearCart(userId: string) {
-  const cart = await this.cartModel.findOne({ userId });
-  if (!cart) {
-    throw new NotFoundException('Cart not found');
-  }
-
-  cart.items = [];
-  const updatedCart = await cart.save();
-  return this.transformCartResponse(updatedCart.toObject());
-}
-
-async deleteCart(userId: string) {
-  const result = await this.cartModel.deleteOne({ userId });
-  if (result.deletedCount === 0) {
-    throw new NotFoundException('Cart not found');
-  }
-  return { message: 'Cart deleted successfully' };
-}
 }

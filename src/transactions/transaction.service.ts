@@ -12,9 +12,55 @@ export class TransactionService {
     private readonly transactionModel: Model<TransactionDocument>
   ) {}
 
+
   async create(transactionData: Partial<TransactionSchemaClass>) {
-    const transaction = new this.transactionModel(transactionData);
-    return transaction.save();
+    try {
+      const transaction = new this.transactionModel({
+        ...transactionData,
+        productItemIds: Array.isArray(transactionData.productItemIds) 
+          ? transactionData.productItemIds 
+          : [transactionData.productItemIds]
+      });
+      return transaction.save();
+    } catch (error) {
+      console.error('Error creating transaction:', error);
+      throw new InternalServerErrorException('Failed to create transaction');
+    }
+  }
+
+  async findById(id: string) {
+    const transaction = await this.transactionModel
+      .findById(id)
+      .select('-__v')
+      .lean();
+
+    if (!transaction) {
+      throw new NotFoundException(`Transaction with ID ${id} not found`);
+    }
+
+    return {
+      data: this.transformTransaction(transaction)
+    };
+  }
+
+  async findByProductItemIds(productItemIds: string[]) {
+    try {
+      const transactions = await this.transactionModel
+        .find({
+          productItemIds: { $in: productItemIds },
+          type: TransactionType.PAYMENT,
+          status: TransactionStatus.SUCCEEDED
+        })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      return {
+        data: transactions.map(transaction => this.transformTransaction(transaction))
+      };
+    } catch (error) {
+      console.error('Error finding transactions by product item ids:', error);
+      throw new InternalServerErrorException('Failed to fetch transactions');
+    }
   }
 
   async findByCheckoutSessionId(checkoutSessionId: string) {
@@ -50,34 +96,32 @@ export class TransactionService {
   }
 
   
-  private transformTransaction(transaction: TransactionDocument) {
-    const transactionObj = transaction.toObject();
+  private transformTransaction(transaction: Record<string, any>) {
     return {
-      _id: transactionObj._id.toString(),
-      stripeCheckoutSessionId: transactionObj.stripeCheckoutSessionId,
-      amount: transactionObj.amount,
-      currency: transactionObj.currency,
-      vendorId: transactionObj.vendorId,
-      customerId: transactionObj.customerId,
-      productId: transactionObj.productId,
-      status: transactionObj.status,
-      type: transactionObj.type,
-      description: transactionObj.description,
-      metadata: transactionObj.metadata,
-      paymentMethodDetails: transactionObj.paymentMethodDetails,
-      receiptEmail: transactionObj.receiptEmail,
-      refundId: transactionObj.refundId,
-      refundAmount: transactionObj.refundAmount,
-      refundReason: transactionObj.refundReason,
-      disputeId: transactionObj.disputeId,
-      disputeStatus: transactionObj.disputeStatus,
-      disputeAmount: transactionObj.disputeAmount,
-      error: transactionObj.error,
-      createdAt: transactionObj.createdAt?.toISOString(),
-      updatedAt: transactionObj.updatedAt?.toISOString()
+      _id: transaction._id.toString(),
+      stripeCheckoutSessionId: transaction.stripeCheckoutSessionId,
+      amount: transaction.amount,
+      currency: transaction.currency,
+      vendorId: transaction.vendorId,
+      customerId: transaction.customerId,
+      productItemIds: transaction.productItemIds,
+      status: transaction.status,
+      type: transaction.type,
+      description: transaction.description,
+      metadata: transaction.metadata,
+      paymentMethodDetails: transaction.paymentMethodDetails,
+      receiptEmail: transaction.receiptEmail,
+      refundId: transaction.refundId,
+      refundAmount: transaction.refundAmount,
+      refundReason: transaction.refundReason,
+      disputeId: transaction.disputeId,
+      disputeStatus: transaction.disputeStatus,
+      disputeAmount: transaction.disputeAmount,
+      error: transaction.error,
+      createdAt: transaction.createdAt?.toISOString(),
+      updatedAt: transaction.updatedAt?.toISOString()
     };
   }
-  
 
   async findByVendorId(vendorId: string) {
     try {

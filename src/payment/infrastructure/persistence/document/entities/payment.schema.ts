@@ -9,6 +9,13 @@ export enum PaymentStatus {
   FAILED = 'FAILED'
 }
 
+export enum PaymentRefundStatus {
+  NONE = 'NONE',
+  PARTIAL = 'PARTIAL',
+  FULL = 'FULL'
+}
+
+
 @Schema({
   timestamps: true,
   toJSON: {
@@ -32,6 +39,18 @@ export class PaymentSchemaClass {
 
   @Prop({ required: true })
   customerId: string;
+
+  @Prop({ required: true })
+  productItemId: string;
+
+  @Prop({ required: true })
+  productDate: Date;
+
+  @Prop({ required: true })
+  startTime: string;
+
+  @Prop({ required: true })
+  duration: number;
 
   @Prop({ 
     type: Number,
@@ -75,6 +94,37 @@ export class PaymentSchemaClass {
 
   @Prop({ type: Date })
   updatedAt: Date;
+
+  @Prop({ 
+    type: String,
+    enum: PaymentRefundStatus,
+    default: PaymentRefundStatus.NONE
+  })
+  refundStatus: PaymentRefundStatus;
+
+  @Prop({ 
+    type: Number,
+    default: 0,
+    get: (v: number) => (v/100).toFixed(2),
+    set: (v: number) => v * 100
+  })
+  refundAmount: number;
+
+  @Prop()
+  refundReason?: string;
+
+  // Add to track last attempted payout date
+  @Prop({ type: Date })
+  lastPayoutAttemptDate?: Date;
+
+  // Add for more detailed vendor payment tracking
+  @Prop({ type: Object })
+  payoutDetails?: {
+    payoutId?: string;
+    processedDate?: Date;
+    transferId?: string;
+    error?: string;
+  };
 }
 
 export const PaymentSchema = SchemaFactory.createForClass(PaymentSchemaClass);
