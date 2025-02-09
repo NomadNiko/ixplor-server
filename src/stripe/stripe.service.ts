@@ -61,15 +61,8 @@ export class StripeService {
         throw new Error('Invalid or empty items array');
       }
 
-      for (const item of items) {
-        const isAvailable = await this.productItemService.validateAvailability(
-          item.productItemId,
-          item.quantity
-        );
-        if (!isAvailable) {
-          throw new Error(`Product item ${item.productItemId} is no longer available in requested quantity`);
-        }
-      }
+      // Mark cart as checking out
+      await this.cartService.setCheckoutStatus(customerId, true);
 
       const totalAmount = items.reduce((sum, item) => {
         const itemPrice = Number(item.price) || 0;
@@ -93,7 +86,6 @@ export class StripeService {
         throw new Error('Vendor not configured for payments');
       }
 
-      // Create compact metadata for Stripe
       const compactItemsMetadata = items.map(item => ({
         id: item.productItemId,
         q: item.quantity,
@@ -101,7 +93,6 @@ export class StripeService {
         t: item.productStartTime
       }));
 
-      // Create session parameters
       const sessionParams: EmbeddedCheckoutParams = {
         ui_mode: 'embedded',
         return_url: returnUrl,
@@ -135,12 +126,10 @@ export class StripeService {
         },
       };
 
-      // Create the session
       const session = await this.stripe.checkout.sessions.create(
         sessionParams as unknown as Stripe.Checkout.SessionCreateParams
       );
 
-      // Create transaction record
       await this.transactionService.create({
         stripeCheckoutSessionId: session.id,
         amount: totalAmount,
@@ -161,6 +150,9 @@ export class StripeService {
         clientSecret: (session as StripeSessionWithClientSecret).client_secret ?? '',
       };
     } catch (error) {
+      // Reset checkout status if anything fails
+      await this.cartService.setCheckoutStatus(customerId, false);
+      
       console.error('Error creating checkout session:', error);
       throw new InternalServerErrorException(
         error instanceof Error
@@ -186,6 +178,11 @@ export class StripeService {
             event.data.object as Stripe.PaymentIntent,
           );
           break;
+        case 'checkout.session.expired':
+          await this.handleCheckoutSessionExpired(
+            event.data.object as Stripe.Checkout.Session,
+          );
+          break;
         case 'transfer.created':
           await this.handleTransferCreated(event.data.object);
           break;
@@ -206,7 +203,6 @@ export class StripeService {
 
   private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
     try {
-      // 1. Update transaction status
       await this.transactionService.updateTransactionStatus(
         session.id,
         TransactionStatus.SUCCEEDED,
@@ -227,9 +223,7 @@ export class StripeService {
         t: string;
       }>;
   
-      // 2. Process each item
       for (const item of items) {
-        // Check product availability
         const productItem = await this.productItemService.findById(item.id);
         if (!productItem?.data) {
           console.error(`Product item ${item.id} not found`);
@@ -237,13 +231,11 @@ export class StripeService {
         }
   
         try {
-          // Update product quantity
           await this.productItemService.updateQuantityForPurchase(
             item.id,
             item.q
           );
   
-          // Create tickets for each quantity
           for (let i = 0; i < item.q; i++) {
             await this.ticketService.createTicket({
               userId: customerId,
@@ -267,25 +259,35 @@ export class StripeService {
           }
         } catch (error) {
           console.error(`Error processing item ${item.id}:`, error);
-          // Continue processing other items even if one fails
         }
       }
   
-      // 3. Clear the cart
-      try {
-        await this.cartService.deleteCart(customerId);
-      } catch (error) {
-        console.error('Error clearing cart:', error);
-        // Don't throw error here as the main purchase process succeeded
-      }
+      await this.cartService.deleteCart(customerId);
   
     } catch (error) {
       console.error('Error processing successful checkout:', error);
       throw error;
     }
   }
+
+  private async handleCheckoutSessionExpired(session: Stripe.Checkout.Session) {
+    try {
+      if (!session.metadata?.customerId) {
+        throw new Error('Missing customer ID in session metadata');
+      }
+
+      await this.cartService.setCheckoutStatus(session.metadata.customerId, false);
+    } catch (error) {
+      console.error('Error handling expired checkout session:', error);
+      throw error;
+    }
+  }
   
   private async handlePaymentFailed(paymentIntent: Stripe.PaymentIntent) {
+    if (paymentIntent.metadata?.customerId) {
+      await this.cartService.setCheckoutStatus(paymentIntent.metadata.customerId, false);
+    }
+
     await this.transactionService.updateTransactionStatus(
       paymentIntent.id,
       TransactionStatus.FAILED,

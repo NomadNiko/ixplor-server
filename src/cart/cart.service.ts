@@ -30,53 +30,86 @@ export class CartService {
         createdAt: item.createdAt?.toISOString(),
         updatedAt: item.updatedAt?.toISOString()
       })),
+      isCheckingOut: cart.isCheckingOut,
       createdAt: cart.createdAt?.toISOString(),
       updatedAt: cart.updatedAt?.toISOString()
     };
   }
 
-  async addToCart(addToCartData: AddToCartData) {
-    const { userId, productItemId, quantity } = addToCartData;
-
-    const isAvailable = await this.productItemService.validateAvailability(
-      productItemId,
-      quantity
-    );
-
-    if (!isAvailable) {
-      throw new BadRequestException('Product item is not available in requested quantity');
-    }
-
-    let cart = await this.cartModel.findOne({ userId });
-
+  async setCheckoutStatus(userId: string, isCheckingOut: boolean) {
+    const cart = await this.cartModel.findOne({ userId });
+    
     if (!cart) {
-      cart = new this.cartModel({
-        userId,
-        items: [],
-      });
+      throw new NotFoundException('Cart not found');
     }
 
-    const existingItemIndex = cart.items.findIndex(
-      item => item.productItemId === productItemId
-    );
-
-    if (existingItemIndex > -1) {
-      cart.items[existingItemIndex].quantity += quantity;
-    } else {
-      cart.items.push({
-        productItemId: addToCartData.productItemId,
-        productName: addToCartData.productName,
-        price: addToCartData.price,
-        quantity: addToCartData.quantity,
-        productDate: addToCartData.productDate,
-        productStartTime: addToCartData.productStartTime,
-        productDuration: addToCartData.productDuration,
-        vendorId: addToCartData.vendorId
-      });
+    cart.isCheckingOut = isCheckingOut;
+    // If we're resetting checkout status, update the timestamp to prevent immediate cleanup
+    if (!isCheckingOut) {
+      cart.updatedAt = new Date();
     }
-
+    
     const savedCart = await cart.save();
     return this.transformCartResponse(savedCart);
+  }
+
+  async addToCart(addToCartData: AddToCartData) {
+    const session = await this.cartModel.db.startSession();
+    
+    try {
+      return await session.withTransaction(async () => {
+        const { userId, productItemId, quantity } = addToCartData;
+  
+        const isAvailable = await this.productItemService.validateAvailability(
+          productItemId,
+          quantity
+        );
+  
+        if (!isAvailable) {
+          throw new BadRequestException('Product item is not available in requested quantity');
+        }
+  
+        await this.productItemService.updateQuantityForPurchase(
+          productItemId,
+          quantity
+        );
+  
+        let cart = await this.cartModel.findOne({ userId }).session(session);
+        
+        if (!cart) {
+          cart = new this.cartModel({
+            userId,
+            items: [],
+          });
+        }
+  
+        const existingItemIndex = cart.items.findIndex(
+          item => item.productItemId === productItemId
+        );
+  
+        if (existingItemIndex > -1) {
+          cart.items[existingItemIndex].quantity += quantity;
+        } else {
+          cart.items.push({
+            productItemId: addToCartData.productItemId,
+            productName: addToCartData.productName,
+            price: addToCartData.price,
+            quantity: addToCartData.quantity,
+            productDate: addToCartData.productDate,
+            productStartTime: addToCartData.productStartTime,
+            productDuration: addToCartData.productDuration,
+            vendorId: addToCartData.vendorId
+          });
+        }
+  
+        const savedCart = await cart.save({ session });
+        return this.transformCartResponse(savedCart);
+      });
+    } catch (error) {
+      throw error;
+    } finally {
+      await session.endSession();
+    }
   }
 
   async updateCartItem(
@@ -111,8 +144,6 @@ export class CartService {
     const savedCart = await cart.save();
     return this.transformCartResponse(savedCart);
   }
-
-
   
   async removeFromCart(userId: string, productItemId: string) {
     const cart = await this.cartModel.findOne({ userId });
