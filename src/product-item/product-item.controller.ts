@@ -113,6 +113,13 @@ import {
     ) {
       return this.itemService.update(id, updateItemDto);
     }
+
+    @Get('by-vendor/:vendorId/public')
+    @ApiOperation({ summary: 'Get published items by vendor - Public access' })
+    async findPublicByVendor(@Param('vendorId') vendorId: string) {
+      // Only return published items for public view
+      return this.itemService.findPublicByVendor(vendorId);
+    }  
   
     @Put(':id/status')
     @UseGuards(AuthGuard('jwt'), RolesGuard)

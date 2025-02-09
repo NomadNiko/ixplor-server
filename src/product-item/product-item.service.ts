@@ -457,6 +457,22 @@ export class ProductItemService {
     }
   }
 
+  async findPublicByVendor(vendorId: string) {
+    const items = await this.itemModel
+      .find({
+        vendorId: vendorId,
+        itemStatus: ProductItemStatusEnum.PUBLISHED, // Only return published items
+      })
+      .select('-__v')
+      .lean()
+      .exec();
+    
+    return {
+      data: items.map((item) => this.transformItemResponse(item)),
+    };
+  }
+
+
   async checkBulkAvailability(
     items: Array<{ productItemId: string; quantity: number; date?: Date }>
   ): Promise<{ 
