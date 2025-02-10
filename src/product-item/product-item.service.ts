@@ -109,8 +109,6 @@ export class ProductItemService {
     }
   }
 
-  
-
   async updateQuantityForPurchase(
     productItemId: string,
     quantityToDeduct: number,
@@ -212,16 +210,16 @@ export class ProductItemService {
         duration: createItemDto.duration || template.data.defaultDuration,
         price: createItemDto.price || template.data.basePrice,
         longitude:
-        createItemDto.longitude || template.data.location?.coordinates[0],
-      latitude:
-        createItemDto.latitude || template.data.location?.coordinates[1],
-      location: {
-        type: 'Point',
-        coordinates: [
           createItemDto.longitude || template.data.location?.coordinates[0],
-          createItemDto.latitude || template.data.location?.coordinates[1]
-        ]
-      },
+        latitude:
+          createItemDto.latitude || template.data.location?.coordinates[1],
+        location: {
+          type: 'Point',
+          coordinates: [
+            createItemDto.longitude || template.data.location?.coordinates[0],
+            createItemDto.latitude || template.data.location?.coordinates[1],
+          ],
+        },
 
         templateName: template.data.templateName,
         description: template.data.description,
@@ -365,6 +363,58 @@ export class ProductItemService {
     };
   }
 
+  async findNearbyToday(
+    lat: number, 
+    lng: number, 
+    radius: number = 10, 
+    startDate?: Date, 
+    endDate?: Date
+  ) {
+    const radiusInMeters = radius * 1609.34; // Convert miles to meters
+  
+    // If start/end dates not provided, default to today and two days from now
+    const today = startDate || new Date();
+    today.setHours(0, 0, 0, 0);
+    const twoDaysFromNow = endDate || new Date(today);
+    twoDaysFromNow.setDate(today.getDate() + 2);
+  
+    console.log('Searching with parameters:', {
+      lat, 
+      lng, 
+      radius, 
+      startDate: today, 
+      endDate: twoDaysFromNow
+    });
+  
+    const items = await this.itemModel
+      .find({
+        itemStatus: ProductItemStatusEnum.PUBLISHED,
+        quantityAvailable: { $gt: 0 },
+        productDate: {
+          $gte: today,
+          $lt: twoDaysFromNow
+        },
+        location: {
+          $near: {
+            $geometry: {
+              type: 'Point',
+              coordinates: [lng, lat],
+            },
+            $maxDistance: radiusInMeters,
+          },
+        },
+      })
+      .select('-__v')
+      .lean()
+      .exec();
+  
+    console.log('Found items:', items.length);
+  
+    return {
+      data: items.map((item) => this.transformItemResponse(item)),
+    };
+  }
+
   private transformItemResponse(item: Record<string, any>) {
     return {
       _id: item._id.toString(),
@@ -399,15 +449,18 @@ export class ProductItemService {
     };
   }
 
-  async checkAvailabilityForDate(productItemId: string, date: Date): Promise<boolean> {
+  async checkAvailabilityForDate(
+    productItemId: string,
+    date: Date,
+  ): Promise<boolean> {
     try {
       const item = await this.itemModel.findOne({
         _id: productItemId,
         productDate: date,
         itemStatus: ProductItemStatusEnum.PUBLISHED,
-        quantityAvailable: { $gt: 0 }
+        quantityAvailable: { $gt: 0 },
       });
-      
+
       return !!item;
     } catch (error) {
       console.error('Error checking product item availability:', error);
@@ -416,39 +469,42 @@ export class ProductItemService {
   }
 
   async checkAvailabilityForDateRange(
-    templateId: string, 
-    startDate: Date, 
-    endDate: Date
-  ): Promise<{ date: string; available: boolean; quantityAvailable: number }[]> {
+    templateId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<
+    { date: string; available: boolean; quantityAvailable: number }[]
+  > {
     try {
-      const items = await this.itemModel.find({
-        templateId,
-        productDate: {
-          $gte: startDate,
-          $lte: endDate
-        },
-        itemStatus: ProductItemStatusEnum.PUBLISHED
-      })
-      .select('productDate quantityAvailable')
-      .lean();
+      const items = await this.itemModel
+        .find({
+          templateId,
+          productDate: {
+            $gte: startDate,
+            $lte: endDate,
+          },
+          itemStatus: ProductItemStatusEnum.PUBLISHED,
+        })
+        .select('productDate quantityAvailable')
+        .lean();
 
       // Create a map of all dates in range
       const dateMap = new Map();
       const currentDate = new Date(startDate);
       while (currentDate <= endDate) {
-        dateMap.set(
-          currentDate.toISOString().split('T')[0], 
-          { available: false, quantityAvailable: 0 }
-        );
+        dateMap.set(currentDate.toISOString().split('T')[0], {
+          available: false,
+          quantityAvailable: 0,
+        });
         currentDate.setDate(currentDate.getDate() + 1);
       }
 
       // Update map with actual availability data
-      items.forEach(item => {
+      items.forEach((item) => {
         const dateKey = new Date(item.productDate).toISOString().split('T')[0];
         dateMap.set(dateKey, {
           available: item.quantityAvailable > 0,
-          quantityAvailable: item.quantityAvailable
+          quantityAvailable: item.quantityAvailable,
         });
       });
 
@@ -456,11 +512,13 @@ export class ProductItemService {
       return Array.from(dateMap.entries()).map(([date, data]) => ({
         date,
         available: data.available,
-        quantityAvailable: data.quantityAvailable
+        quantityAvailable: data.quantityAvailable,
       }));
     } catch (error) {
       console.error('Error checking date range availability:', error);
-      throw new InternalServerErrorException('Failed to check date range availability');
+      throw new InternalServerErrorException(
+        'Failed to check date range availability',
+      );
     }
   }
 
@@ -473,35 +531,37 @@ export class ProductItemService {
       .select('-__v')
       .lean()
       .exec();
-    
+
     return {
       data: items.map((item) => this.transformItemResponse(item)),
     };
   }
 
-
   async checkBulkAvailability(
-    items: Array<{ productItemId: string; quantity: number; date?: Date }>
-  ): Promise<{ 
-    available: boolean; 
-    unavailableItems: Array<{ productItemId: string; reason: string }> 
+    items: Array<{ productItemId: string; quantity: number; date?: Date }>,
+  ): Promise<{
+    available: boolean;
+    unavailableItems: Array<{ productItemId: string; reason: string }>;
   }> {
     try {
       // Explicitly type the array
-      const unavailableItems: Array<{ productItemId: string; reason: string }> = [];
-  
+      const unavailableItems: Array<{ productItemId: string; reason: string }> =
+        [];
+
       for (const item of items) {
         const productItem = await this.itemModel.findOne({
           _id: item.productItemId,
           itemStatus: ProductItemStatusEnum.PUBLISHED,
           ...(item.date && { productDate: item.date }),
-          quantityAvailable: { $gte: item.quantity }
+          quantityAvailable: { $gte: item.quantity },
         });
-  
+
         if (!productItem) {
-          const existingItem = await this.itemModel.findById(item.productItemId);
+          const existingItem = await this.itemModel.findById(
+            item.productItemId,
+          );
           let reason = 'Item not found';
-          
+
           if (existingItem) {
             if (existingItem.itemStatus !== ProductItemStatusEnum.PUBLISHED) {
               reason = 'Item not available for booking';
@@ -509,72 +569,76 @@ export class ProductItemService {
               reason = `Insufficient quantity (requested: ${item.quantity}, available: ${existingItem.quantityAvailable})`;
             }
           }
-  
+
           unavailableItems.push({
             productItemId: item.productItemId,
-            reason
+            reason,
           });
         }
       }
-  
+
       return {
         available: unavailableItems.length === 0,
-        unavailableItems
+        unavailableItems,
       };
     } catch (error) {
       console.error('Error checking bulk availability:', error);
-      throw new InternalServerErrorException('Failed to check bulk availability');
+      throw new InternalServerErrorException(
+        'Failed to check bulk availability',
+      );
     }
   }
 
   async getAvailabilityCalendar(
     templateId: string,
     month: number,
-    year: number
-  ): Promise<{
-    date: string;
-    timeSlots: Array<{
-      startTime: string;
-      available: boolean;
-      quantityAvailable: number;
-    }>;
-  }[]> {
+    year: number,
+  ): Promise<
+    {
+      date: string;
+      timeSlots: Array<{
+        startTime: string;
+        available: boolean;
+        quantityAvailable: number;
+      }>;
+    }[]
+  > {
     try {
       const startDate = new Date(year, month - 1, 1);
       const endDate = new Date(year, month, 0);
 
-      const items = await this.itemModel.find({
-        templateId,
-        productDate: {
-          $gte: startDate,
-          $lte: endDate
-        },
-        itemStatus: ProductItemStatusEnum.PUBLISHED
-      })
-      .select('productDate startTime quantityAvailable')
-      .lean();
+      const items = await this.itemModel
+        .find({
+          templateId,
+          productDate: {
+            $gte: startDate,
+            $lte: endDate,
+          },
+          itemStatus: ProductItemStatusEnum.PUBLISHED,
+        })
+        .select('productDate startTime quantityAvailable')
+        .lean();
 
       // Create a map for each day of the month
       const calendarMap = new Map();
       const currentDate = new Date(startDate);
       while (currentDate <= endDate) {
-        calendarMap.set(
-          currentDate.toISOString().split('T')[0],
-          { timeSlots: [] }
-        );
+        calendarMap.set(currentDate.toISOString().split('T')[0], {
+          timeSlots: [],
+        });
         currentDate.setDate(currentDate.getDate() + 1);
       }
 
       // Populate the calendar with actual availability data
-      items.forEach(item => {
+      items.forEach((item) => {
         const dateKey = new Date(item.productDate).toISOString().split('T')[0];
         const dateData = calendarMap.get(dateKey);
-        
+
         if (dateData) {
           dateData.timeSlots.push({
             startTime: item.startTime,
             available: item.quantityAvailable > 0,
-            quantityAvailable: item.quantityAvailable
+            quantityAvailable: item.quantityAvailable,
           });
         }
       });
@@ -582,14 +646,15 @@ export class ProductItemService {
       // Convert map to array and sort time slots
       return Array.from(calendarMap.entries()).map(([date, data]) => ({
         date,
-        timeSlots: data.timeSlots.sort((a, b) => 
-          a.startTime.localeCompare(b.startTime)
-        )
+        timeSlots: data.timeSlots.sort((a, b) =>
+          a.startTime.localeCompare(b.startTime),
+        ),
       }));
     } catch (error) {
       console.error('Error generating availability calendar:', error);
-      throw new InternalServerErrorException('Failed to generate availability calendar');
+      throw new InternalServerErrorException(
+        'Failed to generate availability calendar',
+      );
     }
   }
-
 }
