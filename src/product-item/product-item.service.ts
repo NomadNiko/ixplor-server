@@ -212,9 +212,16 @@ export class ProductItemService {
         duration: createItemDto.duration || template.data.defaultDuration,
         price: createItemDto.price || template.data.basePrice,
         longitude:
+        createItemDto.longitude || template.data.location?.coordinates[0],
+      latitude:
+        createItemDto.latitude || template.data.location?.coordinates[1],
+      location: {
+        type: 'Point',
+        coordinates: [
           createItemDto.longitude || template.data.location?.coordinates[0],
-        latitude:
-          createItemDto.latitude || template.data.location?.coordinates[1],
+          createItemDto.latitude || template.data.location?.coordinates[1]
+        ]
+      },
 
         templateName: template.data.templateName,
         description: template.data.description,

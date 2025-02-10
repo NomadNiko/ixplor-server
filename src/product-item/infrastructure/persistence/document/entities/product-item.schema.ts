@@ -146,3 +146,6 @@ ProductItemSchema.index({ itemStatus: 1 });
 ProductItemSchema.index({ latitude: 1, longitude: 1 });
 ProductItemSchema.index({ quantityAvailable: 1 });
 ProductItemSchema.index({ templateName: 'text', description: 'text' });
+// Location index for geospatial queries
+ProductItemSchema.index({ location: '2dsphere' });
+// Individual coordinate indexes
