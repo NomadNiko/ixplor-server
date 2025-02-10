@@ -146,15 +146,34 @@ export class CartService {
   }
   
   async removeFromCart(userId: string, productItemId: string) {
-    const cart = await this.cartModel.findOne({ userId });
+    const session = await this.cartModel.db.startSession();
     
-    if (!cart) {
-      throw new NotFoundException('Cart not found');
-    }
+    try {
+      return await session.withTransaction(async () => {
+        const cart = await this.cartModel.findOne({ userId }).session(session);
+        
+        if (!cart) {
+          throw new NotFoundException('Cart not found');
+        }
 
-    cart.items = cart.items.filter(item => item.productItemId !== productItemId);
-    const savedCart = await cart.save();
-    return this.transformCartResponse(savedCart);
+        const itemToRemove = cart.items.find(item => item.productItemId === productItemId);
+        if (itemToRemove) {
+          // Return the quantity back to inventory
+          await this.productItemService.updateQuantity(
+            productItemId,
+            itemToRemove.quantity
+          );
+        }
+
+        cart.items = cart.items.filter(item => item.productItemId !== productItemId);
+        const savedCart = await cart.save({ session });
+        return this.transformCartResponse(savedCart);
+      });
+    } catch (error) {
+      throw error;
+    } finally {
+      await session.endSession();
+    }
   }
 
   async getCart(userId: string) {
@@ -163,15 +182,33 @@ export class CartService {
   }
 
   async clearCart(userId: string) {
-    const cart = await this.cartModel.findOne({ userId });
+    const session = await this.cartModel.db.startSession();
     
-    if (!cart) {
-      return { userId, items: [] };
-    }
+    try {
+      return await session.withTransaction(async () => {
+        const cart = await this.cartModel.findOne({ userId }).session(session);
+        
+        if (!cart) {
+          return { userId, items: [] };
+        }
 
-    cart.items = [];
-    const savedCart = await cart.save();
-    return this.transformCartResponse(savedCart);
+        // Return all items to inventory
+        for (const item of cart.items) {
+          await this.productItemService.updateQuantity(
+            item.productItemId,
+            item.quantity
+          );
+        }
+
+        cart.items = [];
+        const savedCart = await cart.save({ session });
+        return this.transformCartResponse(savedCart);
+      });
+    } catch (error) {
+      throw error;
+    } finally {
+      await session.endSession();
+    }
   }
 
   async deleteCart(userId: string) {
