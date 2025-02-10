@@ -378,14 +378,6 @@ export class ProductItemService {
     const twoDaysFromNow = endDate || new Date(today);
     twoDaysFromNow.setDate(today.getDate() + 2);
   
-    console.log('Searching with parameters:', {
-      lat, 
-      lng, 
-      radius, 
-      startDate: today, 
-      endDate: twoDaysFromNow
-    });
-  
     const items = await this.itemModel
       .find({
         itemStatus: ProductItemStatusEnum.PUBLISHED,
@@ -407,9 +399,6 @@ export class ProductItemService {
       .select('-__v')
       .lean()
       .exec();
-  
-    console.log('Found items:', items.length);
-  
     return {
       data: items.map((item) => this.transformItemResponse(item)),
     };

@@ -16,10 +16,13 @@ import { TicketService } from '../tickets/ticket.service';
 import { PayoutSchemaClass } from '../payout/infrastructure/persistence/document/entities/payout.schema';
 import { PayoutStatus } from '../payout/infrastructure/persistence/document/entities/payout.schema';
 
-interface StripeSessionWithClientSecret extends Stripe.Checkout.Session {
-  client_secret?: string;
+
+// Updated interface to match new Stripe types
+interface CustomSession extends Omit<Stripe.Checkout.Session, 'client_secret'> {
+  client_secret: string | null;
 }
 
+// Updated interface for embedded checkout params
 interface EmbeddedCheckoutParams extends Omit<Stripe.Checkout.SessionCreateParams, 'success_url' | 'cancel_url'> {
   ui_mode: 'embedded';
   return_url: string;
@@ -42,11 +45,10 @@ export class StripeService {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY', { infer: true }) ?? '',
       {
-        apiVersion: '2023-08-16',
+        apiVersion: '2025-01-27.acacia',
       },
     );
   }
-
   async createCheckoutSession({
     items,
     customerId,
@@ -61,7 +63,6 @@ export class StripeService {
         throw new Error('Invalid or empty items array');
       }
 
-      // Mark cart as checking out
       await this.cartService.setCheckoutStatus(customerId, true);
 
       const totalAmount = items.reduce((sum, item) => {
@@ -127,7 +128,7 @@ export class StripeService {
       };
 
       const session = await this.stripe.checkout.sessions.create(
-        sessionParams as unknown as Stripe.Checkout.SessionCreateParams
+        sessionParams as Stripe.Checkout.SessionCreateParams
       );
 
       await this.transactionService.create({
@@ -146,11 +147,12 @@ export class StripeService {
         type: TransactionType.PAYMENT,
       });
 
+      // Cast the session to our custom type that includes client_secret
+      const sessionWithSecret = session as unknown as CustomSession;
       return {
-        clientSecret: (session as StripeSessionWithClientSecret).client_secret ?? '',
+        clientSecret: sessionWithSecret.client_secret || '',
       };
     } catch (error) {
-      // Reset checkout status if anything fails
       await this.cartService.setCheckoutStatus(customerId, false);
       
       console.error('Error creating checkout session:', error);
