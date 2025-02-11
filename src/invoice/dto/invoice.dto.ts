@@ -39,8 +39,14 @@ export class InvoiceResponseDto {
   @ApiProperty({ example: '67a56b620c52dd570aa42e3d' })
   vendorId: string;
 
+  @ApiProperty({ example: 'Beach Adventures LLC' })
+  vendorName: string;
+
   @ApiProperty({ example: '67a56af00c52dd570aa42e31' })
   customerId: string;
+
+  @ApiProperty({ example: 'John Doe' })
+  customerName: string;
 
   @ApiProperty({ type: [String], example: ['67a595d60c52dd570aa42f5b'] })
   productItemIds: string[];
