@@ -40,6 +40,7 @@ import { PaymentModule } from './payment/payment.module';
 import { PayoutModule } from './payout/payout.module';
 import { ProductItemModule } from './product-item/product-item.module';
 import { ProductTemplateModule } from './product-template/product-template.module';
+import { InvoiceModule } from './invoice/invoice.module';
 
 // <database-block>
 const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
@@ -118,6 +119,7 @@ const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
     ProductItemModule,
     ProductTemplateModule,
     TransactionModule,
+    InvoiceModule,
   ],
 })
 export class AppModule {}
