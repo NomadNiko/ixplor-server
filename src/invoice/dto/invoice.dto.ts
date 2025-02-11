@@ -51,6 +51,9 @@ export class InvoiceResponseDto {
   @ApiProperty({ type: [String], example: ['67a595d60c52dd570aa42f5b'] })
   productItemIds: string[];
 
+  @ApiProperty({ type: [InvoiceItemDto] })
+  items: InvoiceItemDto[];
+
   @ApiProperty({ example: 'succeeded' })
   status: string;
 

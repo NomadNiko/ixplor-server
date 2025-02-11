@@ -8,6 +8,15 @@ import { ProductItemSchemaClass } from '../product-item/infrastructure/persisten
 import { VendorService } from '../vendors/vendor.service';
 import { InvoiceResponseDto } from './dto/invoice.dto';
 
+interface CartItemMetadata {
+  productItemId: string;
+  quantity: number;
+  price: number;
+  productDate: string;
+  productStartTime: string;
+  productDuration: number;
+}
+
 @Injectable()
 export class InvoiceService {
   constructor(
@@ -32,32 +41,55 @@ export class InvoiceService {
 
   async findByCustomerId(customerId: string): Promise<InvoiceResponseDto[]> {
     const transactions = await this.transactionModel
-      .find({ 
+      .find({
         customerId,
         type: 'payment',
-        status: 'succeeded'
+        status: 'succeeded',
       })
       .sort({ createdAt: -1 })
       .lean();
 
-    return Promise.all(transactions.map(t => this.transformToInvoice(t)));
+    return Promise.all(transactions.map((t) => this.transformToInvoice(t)));
   }
 
   async findByVendorId(vendorId: string): Promise<InvoiceResponseDto[]> {
     const transactions = await this.transactionModel
-      .find({ 
+      .find({
         vendorId,
         type: 'payment',
-        status: 'succeeded'
+        status: 'succeeded',
       })
       .sort({ createdAt: -1 })
       .lean();
 
-    return Promise.all(transactions.map(t => this.transformToInvoice(t)));
+    return Promise.all(transactions.map((t) => this.transformToInvoice(t)));
   }
 
-  async isUserAssociatedWithVendor(userId: string, vendorId: string): Promise<boolean> {
+  async isUserAssociatedWithVendor(
+    userId: string,
+    vendorId: string,
+  ): Promise<boolean> {
     return this.vendorService.isUserAssociatedWithVendor(userId, vendorId);
+  }
+
+  private parseCartItemsMetadata(metadata: any): CartItemMetadata[] {
+    try {
+      if (!metadata?.items) {
+        return [];
+      }
+      const items = JSON.parse(metadata.items);
+      return items.map(item => ({
+        productItemId: item.productItemId,
+        quantity: item.quantity,
+        price: item.price,
+        productDate: item.productDate,
+        productStartTime: item.productStartTime,
+        productDuration: item.productDuration
+      }));
+    } catch (error) {
+      console.error('Error parsing cart items metadata:', error);
+      return [];
+    }
   }
 
   private async transformToInvoice(transaction: any): Promise<InvoiceResponseDto> {
@@ -71,16 +103,32 @@ export class InvoiceService {
     const vendor = await this.vendorModel.findById(transaction.vendorId).lean();
     const vendorName = vendor?.businessName || 'Unknown Vendor';
 
-    // Parse items from metadata
-    const items = transaction.metadata?.items ? JSON.parse(transaction.metadata.items) : [];
+    // Parse cart items from metadata
+    const cartItems = this.parseCartItemsMetadata(transaction.metadata);
 
     // Get product details for each item
-    const productItemIds = transaction.productItemIds || [];
+    const productItemIds = cartItems.map(item => item.productItemId);
     const products = await this.productItemModel.find({
       _id: { $in: productItemIds }
     }).lean();
 
-    // Create the response
+    // Create product ID to name mapping
+    const productNameMap = products.reduce((acc, product) => {
+      acc[product._id.toString()] = product.templateName;
+      return acc;
+    }, {});
+
+    // Create array of invoice items combining product details with cart metadata
+    const items = cartItems.map(cartItem => ({
+      productItemId: cartItem.productItemId,
+      productName: productNameMap[cartItem.productItemId] || 'Unknown Product',
+      price: cartItem.price,
+      quantity: cartItem.quantity,
+      productDate: cartItem.productDate,
+      productStartTime: cartItem.productStartTime,
+      productDuration: cartItem.productDuration
+    }));
+
     return {
       _id: transaction._id.toString(),
       stripeCheckoutSessionId: transaction.stripeCheckoutSessionId,
@@ -91,9 +139,10 @@ export class InvoiceService {
       customerId: transaction.customerId,
       customerName,
       productItemIds,
+      items,
       status: transaction.status,
       type: transaction.type,
-      description: transaction.description
+      description: `Invoice #${transaction._id.toString().slice(-6)}`
     };
   }
 }
