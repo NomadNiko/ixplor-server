@@ -37,14 +37,14 @@ export class ProductItemController {
     description: 'Returns all items for the specified template',
   })
   async findByTemplate(@Param('templateId') templateId: string) {
-    return this.itemService.findByTemplate(templateId);
+    return await this.itemService.findByTemplate(templateId);
   }
 
   @Get('by-vendor/:vendorId')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Get items by vendor' })
   async findByVendor(@Param('vendorId') vendorId: string) {
-    return this.itemService.findByVendor(vendorId);
+    return await this.itemService.findByVendor(vendorId);
   }
 
   @Get('available/:templateId')
@@ -60,7 +60,7 @@ export class ProductItemController {
     if (isNaN(date.getTime())) {
       throw new BadRequestException('Invalid date format');
     }
-    return this.itemService.findAvailableItems(templateId, date);
+    return await this.itemService.findAvailableItems(templateId, date);
   }
 
   @Get('nearby')
@@ -73,28 +73,28 @@ export class ProductItemController {
     @Query('lng', ParseFloatPipe) lng: number,
     @Query('radius', new ParseFloatPipe({ optional: true })) radius?: number,
   ) {
-    return this.itemService.findNearby(lat, lng, radius);
+    return await this.itemService.findNearby(lat, lng, radius);
   }
 
   @Get('nearby-today')
-@ApiOperation({ summary: 'Find nearby items for today or specified date range' })
-@ApiQuery({ name: 'lat', type: Number, required: true })
-@ApiQuery({ name: 'lng', type: Number, required: true })
-@ApiQuery({ name: 'radius', type: Number, required: false })
-@ApiQuery({ name: 'startDate', type: String, required: false })
-@ApiQuery({ name: 'endDate', type: String, required: false })
-async findNearbyToday(
-  @Query('lat', ParseFloatPipe) lat: number,
-  @Query('lng', ParseFloatPipe) lng: number,
-  @Query('radius', new ParseFloatPipe({ optional: true })) radius?: number,
-  @Query('startDate') startDateStr?: string,
-  @Query('endDate') endDateStr?: string
-) {
-  const startDate = startDateStr ? new Date(startDateStr) : undefined;
-  const endDate = endDateStr ? new Date(endDateStr) : undefined;
-  
-  return this.itemService.findNearbyToday(lat, lng, radius, startDate, endDate);
-}
+  @ApiOperation({ summary: 'Find nearby items for today or specified date range' })
+  @ApiQuery({ name: 'lat', type: Number, required: true })
+  @ApiQuery({ name: 'lng', type: Number, required: true })
+  @ApiQuery({ name: 'radius', type: Number, required: false })
+  @ApiQuery({ name: 'startDate', type: String, required: false })
+  @ApiQuery({ name: 'endDate', type: String, required: false })
+  async findNearbyToday(
+    @Query('lat', ParseFloatPipe) lat: number,
+    @Query('lng', ParseFloatPipe) lng: number,
+    @Query('radius', new ParseFloatPipe({ optional: true })) radius?: number,
+    @Query('startDate') startDateStr?: string,
+    @Query('endDate') endDateStr?: string
+  ) {
+    const startDate = startDateStr ? new Date(startDateStr) : undefined;
+    const endDate = endDateStr ? new Date(endDateStr) : undefined;
+    
+    return await this.itemService.findNearbyToday(lat, lng, radius, startDate, endDate);
+  }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get item by ID' })
@@ -103,7 +103,7 @@ async findNearbyToday(
     description: 'Returns a single product item',
   })
   async findById(@Param('id') id: string) {
-    return this.itemService.findById(id);
+    return await this.itemService.findById(id);
   }
 
   @Post('generate/:templateId')
@@ -118,7 +118,7 @@ async findNearbyToday(
     @Param('templateId') templateId: string,
     @Body() createItemDto: any,
   ) {
-    return this.itemService.createFromTemplate(templateId, createItemDto);
+    return await this.itemService.createFromTemplate(templateId, createItemDto);
   }
 
   @Put(':id')
@@ -130,14 +130,13 @@ async findNearbyToday(
     description: 'The product item has been successfully updated.',
   })
   async update(@Param('id') id: string, @Body() updateItemDto: any) {
-    return this.itemService.update(id, updateItemDto);
+    return await this.itemService.update(id, updateItemDto);
   }
 
   @Get('by-vendor/:vendorId/public')
   @ApiOperation({ summary: 'Get published items by vendor - Public access' })
   async findPublicByVendor(@Param('vendorId') vendorId: string) {
-    // Only return published items for public view
-    return this.itemService.findPublicByVendor(vendorId);
+    return await this.itemService.findPublicByVendor(vendorId);
   }
 
   @Put(':id/status')
@@ -148,7 +147,7 @@ async findNearbyToday(
     @Param('id') id: string,
     @Body('status') status: ProductItemStatusEnum,
   ) {
-    return this.itemService.updateStatus(id, status);
+    return await this.itemService.updateStatus(id, status);
   }
 
   @Put(':id/quantity')
@@ -159,7 +158,7 @@ async findNearbyToday(
     @Param('id') id: string,
     @Body('quantityChange') quantityChange: number,
   ) {
-    return this.itemService.updateQuantity(id, quantityChange);
+    return await this.itemService.updateQuantity(id, quantityChange);
   }
 
   @Delete(':id')
@@ -171,6 +170,6 @@ async findNearbyToday(
     description: 'The product item has been successfully deleted.',
   })
   async remove(@Param('id') id: string) {
-    return this.itemService.remove(id);
+    return await this.itemService.remove(id);
   }
 }

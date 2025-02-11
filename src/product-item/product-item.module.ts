@@ -8,6 +8,11 @@ import {
   ProductItemSchema,
 } from './infrastructure/persistence/document/entities/product-item.schema';
 import { ProductTemplateModule } from '../product-template/product-template.module';
+import { ProductItemQueryService } from './services/product-item-query.service';
+import { ProductItemAvailabilityService } from './services/product-item-availability.service';
+import { ProductItemQuantityService } from './services/product-item-quantity.service';
+import { ProductItemManagementService } from './services/product-item-management.service';
+import { ProductItemTransformService } from './services/product-item-transform.service';
 
 @Module({
   imports: [
@@ -18,10 +23,17 @@ import { ProductTemplateModule } from '../product-template/product-template.modu
       },
     ]),
     VendorModule,
-    ProductTemplateModule, // Import ProductTemplateModule to use its service
+    ProductTemplateModule,
   ],
   controllers: [ProductItemController],
-  providers: [ProductItemService],
+  providers: [
+    ProductItemService,
+    ProductItemQueryService,
+    ProductItemAvailabilityService,
+    ProductItemQuantityService,
+    ProductItemManagementService,
+    ProductItemTransformService,
+  ],
   exports: [ProductItemService],
 })
 export class ProductItemModule {}
