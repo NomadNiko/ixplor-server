@@ -53,8 +53,30 @@ export class SupportTicketController {
     return this.supportTicketService.create(createTicketDto);
   }
 
+  @Get('admin/all')
+  @UseGuards(RolesGuard)
+  @Roles(RoleEnum.admin)
+  @ApiOperation({ summary: 'Get all tickets (Admin only)' })
+  @ApiQuery({ name: 'sortField', required: false })
+  @ApiQuery({ name: 'sortDirection', required: false })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'searchTerm', required: false })
+  async findAllAdmin(
+    @Query('sortField') sortField?: string,
+    @Query('sortDirection') sortDirection?: 'asc' | 'desc',
+    @Query('status') status?: TicketStatus,
+    @Query('searchTerm') searchTerm?: string,
+  ) {
+    return this.supportTicketService.findAllAdmin({
+      sortField,
+      sortDirection,
+      status,
+      searchTerm,
+    });
+  }
+
   @Get()
-  @ApiOperation({ summary: 'Get all support tickets' })
+  @ApiOperation({ summary: 'Get support tickets' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'status', required: false, enum: TicketStatus })
@@ -158,7 +180,7 @@ export class SupportTicketController {
   ) {
     return this.supportTicketService.assignTicket(id, assignedTo);
   }
-
+  
   @Get('search/by-ticket-id/:ticketId')
   @ApiOperation({ summary: 'Find ticket by ticket ID (SD00001 format)' })
   @ApiParam({ name: 'ticketId', description: 'Ticket ID in SD00001 format' })

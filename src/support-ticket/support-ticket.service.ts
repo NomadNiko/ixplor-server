@@ -57,7 +57,8 @@ export class SupportTicketService {
         ...createTicketDto,
         ticketId,
         createDate: new Date(),
-        status: TicketStatus.OPENED
+        status: TicketStatus.OPENED,
+        updates: []
       });
 
       const savedTicket = await ticket.save();
@@ -66,6 +67,83 @@ export class SupportTicketService {
       return this.transformTicket(ticketObj);
     } catch (error) {
       throw new InternalServerErrorException('Failed to create support ticket');
+    }
+  }
+
+  async findAllAdmin(options: {
+    sortField?: string;
+    sortDirection?: 'asc' | 'desc';
+    status?: TicketStatus;
+    searchTerm?: string;
+    dateRange?: string;
+  }): Promise<{ tickets: any[] }> {
+    try {
+      const query: any = {};
+
+      // Add status filter if provided
+      if (options.status) {
+        query.status = options.status;
+      }
+
+      // Add search term filter if provided
+      if (options.searchTerm) {
+        query.$or = [
+          { ticketTitle: { $regex: options.searchTerm, $options: 'i' } },
+          { ticketDescription: { $regex: options.searchTerm, $options: 'i' } },
+          { ticketId: { $regex: options.searchTerm, $options: 'i' } }
+        ];
+      }
+
+      // Add date range filter if provided
+      if (options.dateRange) {
+        const now = new Date();
+        const startDate = new Date();
+        
+        switch (options.dateRange) {
+          case 'today':
+            startDate.setHours(0, 0, 0, 0);
+            query.createDate = { $gte: startDate, $lte: now };
+            break;
+          case 'week':
+            startDate.setDate(now.getDate() - 7);
+            query.createDate = { $gte: startDate, $lte: now };
+            break;
+          case 'month':
+            startDate.setMonth(now.getMonth() - 1);
+            query.createDate = { $gte: startDate, $lte: now };
+            break;
+        }
+      }
+
+      // Build sort configuration
+      const sort: any = {};
+      if (options.sortField) {
+        // Map frontend sort fields to database fields
+        const sortFieldMap: { [key: string]: string } = {
+          createDate: 'createDate',
+          lastUpdate: 'updatedAt',
+          status: 'status'
+        };
+
+        const dbSortField = sortFieldMap[options.sortField] || 'createDate';
+        sort[dbSortField] = options.sortDirection === 'asc' ? 1 : -1;
+      } else {
+        // Default sort by creation date descending
+        sort.createDate = -1;
+      }
+
+      const tickets = await this.ticketModel
+        .find(query)
+        .sort(sort)
+        .lean()
+        .exec();
+
+      return {
+        tickets: tickets.map(ticket => this.transformTicket(ticket))
+      };
+    } catch (error) {
+      console.error('Error in findAllAdmin:', error);
+      throw new InternalServerErrorException('Failed to fetch tickets');
     }
   }
 
@@ -129,7 +207,13 @@ export class SupportTicketService {
     currentPage: number;
   }> {
     try {
-      const query = { createdBy: userId };
+      const query = { 
+        $or: [
+          { createdBy: userId },
+          { assignedTo: userId }
+        ]
+      };
+      
       const total = await this.ticketModel.countDocuments(query);
       const totalPages = Math.ceil(total / limit);
 
