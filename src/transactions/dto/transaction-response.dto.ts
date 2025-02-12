@@ -72,6 +72,9 @@ export class TransactionResponseDto {
   @ApiPropertyOptional({ example: 'Card declined' })
   error?: string;
 
+  @ApiProperty({ example: '2025-02-11T19:25:21.000Z' })
+  transactionDate: string;  // Added explicit transaction date field
+
   @ApiProperty()
   createdAt: string;
 

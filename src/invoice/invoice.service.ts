@@ -142,6 +142,7 @@ export class InvoiceService {
       items,
       status: transaction.status,
       type: transaction.type,
+      invoiceDate: transaction.createdAt?.toISOString(),
       description: `Invoice #${transaction._id.toString().slice(-6)}`
     };
   }

@@ -60,6 +60,9 @@ export class InvoiceResponseDto {
   @ApiProperty({ example: 'payment' })
   type: string;
 
+  @ApiProperty({ example: '2025-02-11T19:25:21.000Z' })
+  invoiceDate: string;  // Added invoice date field
+
   @ApiProperty({ example: 'Payment for 5 item(s)' })
   description: string;
 }

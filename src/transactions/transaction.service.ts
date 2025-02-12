@@ -118,6 +118,7 @@ export class TransactionService {
       disputeStatus: transaction.disputeStatus,
       disputeAmount: transaction.disputeAmount,
       error: transaction.error,
+      transactionDate: transaction.createdAt?.toISOString(),
       createdAt: transaction.createdAt?.toISOString(),
       updatedAt: transaction.updatedAt?.toISOString()
     };
