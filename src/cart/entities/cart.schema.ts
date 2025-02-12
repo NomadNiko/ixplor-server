@@ -110,20 +110,6 @@ CartSchema.virtual('itemCount').get(function() {
 });
 
 CartSchema.pre('save', function(next) {
-  if (this.items.length === 0) {
-    return next();
-  }
-  const vendorId = this.items[0].vendorId;
-  const allSameVendor = this.items.every(item => item.vendorId === vendorId);
-  
-  if (!allSameVendor) {
-    const error = new Error('All items in cart must be from the same vendor');
-    return next(error);
-  }
-  next();
-});
-
-CartSchema.pre('save', function(next) {
   const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
   
   const invalidTimes = this.items.filter(item => 
