@@ -129,7 +129,7 @@ export class ProductTemplateController {
 
   @Put(':id/status')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(RoleEnum.admin, RoleEnum.vendor)
+  @Roles(RoleEnum.admin, RoleEnum.vendor, RoleEnum.prevendor)
   @ApiOperation({ summary: 'Update template status' })
   async updateStatus(
     @Param('id') id: string,

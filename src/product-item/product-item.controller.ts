@@ -141,7 +141,7 @@ export class ProductItemController {
 
   @Put(':id/status')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(RoleEnum.admin, RoleEnum.vendor)
+  @Roles(RoleEnum.admin, RoleEnum.vendor, RoleEnum.prevendor)
   @ApiOperation({ summary: 'Update item status' })
   async updateStatus(
     @Param('id') id: string,
@@ -152,7 +152,7 @@ export class ProductItemController {
 
   @Put(':id/quantity')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles(RoleEnum.admin, RoleEnum.vendor)
+  @Roles(RoleEnum.admin, RoleEnum.vendor, RoleEnum.prevendor)
   @ApiOperation({ summary: 'Update item quantity' })
   async updateQuantity(
     @Param('id') id: string,
