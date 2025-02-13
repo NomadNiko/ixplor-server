@@ -17,15 +17,9 @@ export class VendorOwnerService {
 
   async findVendorsOwnedByUser(userId: string) {
     try {
-      const user = await this.userModel.findById(userId);
-      if (!user) {
-        throw new NotFoundException(`User with ID ${userId} not found`);
-      }
-  
       const vendors = await this.vendorModel
         .find({
-          ownerIds: userId,
-          vendorStatus: VendorStatusEnum.APPROVED,
+          ownerIds: userId
         })
         .select('-__v -adminNotes')
         .lean()
@@ -41,9 +35,6 @@ export class VendorOwnerService {
         })),
       };
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
       console.error('Error finding vendors for user:', error);
       throw new InternalServerErrorException('Failed to fetch user vendors');
     }

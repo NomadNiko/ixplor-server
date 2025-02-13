@@ -1,30 +1,24 @@
-import {
-  Injectable,
-  NotFoundException,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import {
-  VendorSchemaClass,
-  VendorSchemaDocument,
-} from '../infrastructure/persistence/document/entities/vendor.schema';
+import { VendorSchemaClass, VendorSchemaDocument } from '../infrastructure/persistence/document/entities/vendor.schema';
 import { CreateVendorDto } from '../dto/create-vendor.dto';
 import { UpdateVendorDto } from '../dto/update-vendor.dto';
 import { transformVendorResponse } from '../../utils/vendor.transform';
-import { UserSchemaClass } from 'src/users/infrastructure/persistence/document/entities/user.schema';
 
 @Injectable()
 export class VendorCrudService {
   constructor(
     @InjectModel(VendorSchemaClass.name)
     private readonly vendorModel: Model<VendorSchemaDocument>,
-    @InjectModel(UserSchemaClass.name)
-    private readonly userModel: Model<UserSchemaClass>,
   ) {}
 
   async findAll() {
-    const vendors = await this.vendorModel.find().select('-__v').lean().exec();
+    const vendors = await this.vendorModel
+      .find()
+      .select('-__v')
+      .lean()
+      .exec();
 
     return {
       data: vendors.map((vendor) => transformVendorResponse(vendor)),
@@ -46,7 +40,10 @@ export class VendorCrudService {
   }
 
   async findById(id: string) {
-    const vendor = await this.vendorModel.findById(id).lean().exec();
+    const vendor = await this.vendorModel
+      .findById(id)
+      .lean()
+      .exec();
 
     if (!vendor) {
       throw new NotFoundException(`Vendor with ID ${id} not found`);
@@ -64,30 +61,11 @@ export class VendorCrudService {
         vendorStatus: 'SUBMITTED',
         ownerIds: [userId],
       });
-
+      
       const savedVendor = await createdVendor.save();
       // Convert to plain object before transformation
       const plainVendor = savedVendor.toObject();
-
-      const session = await this.vendorModel.db.startSession();
-
-      const user = await this.userModel.findById(userId).session(session);
-      if (!user) {
-        throw new NotFoundException(`User with ID ${userId} not found`);
-      }
-      if (user.role?._id !== '1' && user.role?._id !== '3') {
-        await this.userModel.findByIdAndUpdate(
-          userId,
-          {
-            'role._id': '4',
-            updatedAt: new Date(),
-          },
-          {
-            session,
-            runValidators: true,
-          },
-        );
-      }
+      
       return {
         data: transformVendorResponse(plainVendor),
         message: 'Vendor created successfully',
@@ -129,7 +107,7 @@ export class VendorCrudService {
   async remove(id: string) {
     try {
       const vendor = await this.vendorModel.findById(id);
-
+      
       if (!vendor) {
         throw new NotFoundException(`Vendor with ID ${id} not found`);
       }
