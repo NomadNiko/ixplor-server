@@ -7,7 +7,6 @@ import {
   TicketStatus 
 } from './infrastructure/persistence/document/entities/ticket.schema';
 import { VendorSchemaClass } from '../vendors/infrastructure/persistence/document/entities/vendor.schema';
-import { PaymentService } from '../payment/payment.service';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { ProductItemService } from 'src/product-item/product-item.service';
 
@@ -19,8 +18,6 @@ export class TicketService {
     private readonly productItemService: ProductItemService,
     @InjectModel(VendorSchemaClass.name)
     private readonly vendorModel: Model<VendorSchemaClass>,
-    @Inject(forwardRef(() => PaymentService))
-    private readonly paymentService: PaymentService,
   ) {}
 
   private transformTicket(ticket: TicketDocument) {

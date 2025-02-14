@@ -159,6 +159,24 @@ export class UsersService {
     return this.usersRepository.findByEmail(email);
   }
 
+  async getUserName(id: User['id']): Promise<{ firstName?: string; lastName?: string; email: string }> {
+    const user = await this.usersRepository.findById(id);
+    if (!user) {
+      throw new UnprocessableEntityException({
+        status: HttpStatus.UNPROCESSABLE_ENTITY,
+        errors: {
+          user: 'userNotExists',
+        },
+      });
+    }
+  
+    return {
+      firstName: user.firstName as string,
+      lastName: user.lastName as string,
+      email: user.email as string,
+    };
+  }
+
   findBySocialIdAndProvider({
     socialId,
     provider,

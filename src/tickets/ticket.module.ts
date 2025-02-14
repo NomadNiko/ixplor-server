@@ -5,7 +5,6 @@ import { TicketService } from './ticket.service';
 import { VendorModule } from '../vendors/vendor.module';
 import { ProductItemModule } from '../product-item/product-item.module';
 import { TicketSchemaClass, TicketSchema } from './infrastructure/persistence/document/entities/ticket.schema';
-import { PaymentModule } from '../payment/payment.module';
 import { VendorSchema, VendorSchemaClass } from '../vendors/infrastructure/persistence/document/entities/vendor.schema';
 
 @Module({
@@ -22,7 +21,6 @@ import { VendorSchema, VendorSchemaClass } from '../vendors/infrastructure/persi
     ]),
     VendorModule,
     ProductItemModule,
-    forwardRef(() => PaymentModule), // Handle circular dependency with PaymentModule
   ],
   controllers: [TicketController],
   providers: [TicketService],

@@ -136,4 +136,26 @@ export class UsersController {
   remove(@Param('id') id: User['id']): Promise<void> {
     return this.usersService.remove(id);
   }
+
+  @ApiOkResponse({
+    schema: {
+      type: 'object',
+      properties: {
+        firstName: { type: 'string', nullable: true },
+        lastName: { type: 'string', nullable: true },
+        email: { type: 'string' }
+      }
+    }
+  })
+  @Get(':id/name')
+  @UseGuards(AuthGuard('jwt'))  // Only requires authentication, no specific role
+  @HttpCode(HttpStatus.OK)
+  @ApiParam({
+    name: 'id',
+    type: String,
+    required: true,
+  })
+  getUserName(@Param('id') id: User['id']): Promise<{ firstName?: string; lastName?: string; email: string }> {
+    return this.usersService.getUserName(id);
+  }
 }
