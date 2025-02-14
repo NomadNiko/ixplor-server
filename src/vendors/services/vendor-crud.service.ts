@@ -5,12 +5,15 @@ import { VendorSchemaClass, VendorSchemaDocument } from '../infrastructure/persi
 import { CreateVendorDto } from '../dto/create-vendor.dto';
 import { UpdateVendorDto } from '../dto/update-vendor.dto';
 import { transformVendorResponse } from '../../utils/vendor.transform';
+import { UserSchemaClass } from 'src/users/infrastructure/persistence/document/entities/user.schema';
 
 @Injectable()
 export class VendorCrudService {
   constructor(
     @InjectModel(VendorSchemaClass.name)
     private readonly vendorModel: Model<VendorSchemaDocument>,
+    @InjectModel(UserSchemaClass.name)
+    private readonly userModel: Model<UserSchemaClass>,
   ) {}
 
   async findAll() {
@@ -55,24 +58,68 @@ export class VendorCrudService {
   }
 
   async create(createVendorDto: CreateVendorDto, userId: string) {
+    const session = await this.vendorModel.db.startSession();
+    
     try {
-      const createdVendor = new this.vendorModel({
-        ...createVendorDto,
-        vendorStatus: 'SUBMITTED',
-        ownerIds: [userId],
+      let result;
+      await session.withTransaction(async () => {
+        // Create vendor within the session
+        const createdVendor = new this.vendorModel({
+          ...createVendorDto,
+          vendorStatus: 'SUBMITTED',
+          ownerIds: [userId],
+        });
+        const savedVendor = await createdVendor.save({ session });
+        const plainVendor = savedVendor.toObject();
+  
+        // Find and update user
+        const user = await this.userModel.findById(userId).session(session);
+        if (!user) {
+          throw new NotFoundException(`User with ID ${userId} not found`);
+        }
+  
+        // Update role if needed
+        if (user.role?._id !== '1' && user.role?._id !== '3') {
+          await this.userModel.findByIdAndUpdate(
+            userId,
+            {
+              'role._id': '4',
+              updatedAt: new Date(),
+              // Add the new vendor ID to the user's vendorProfileIds
+              $addToSet: { vendorProfileIds: savedVendor._id }
+            },
+            {
+              session,
+              runValidators: true,
+            },
+          );
+        } else {
+          // Just update vendorProfileIds if role doesn't need to change
+          await this.userModel.findByIdAndUpdate(
+            userId,
+            {
+              $addToSet: { vendorProfileIds: savedVendor._id },
+              updatedAt: new Date()
+            },
+            {
+              session,
+              runValidators: true,
+            }
+          );
+        }
+  
+        result = {
+          data: transformVendorResponse(plainVendor),
+          message: 'Vendor created successfully',
+        };
       });
-      
-      const savedVendor = await createdVendor.save();
-      // Convert to plain object before transformation
-      const plainVendor = savedVendor.toObject();
-      
-      return {
-        data: transformVendorResponse(plainVendor),
-        message: 'Vendor created successfully',
-      };
+  
+      return result;
     } catch (error) {
       console.error('Error creating vendor:', error);
       throw new InternalServerErrorException('Failed to create vendor');
+    } finally {
+      await session.endSession();
     }
   }
 
