@@ -2,6 +2,7 @@ import {
   HttpStatus,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -160,21 +161,26 @@ export class UsersService {
   }
 
   async getUserName(id: User['id']): Promise<{ firstName?: string; lastName?: string; email: string }> {
-    const user = await this.usersRepository.findById(id);
-    if (!user) {
-      throw new UnprocessableEntityException({
-        status: HttpStatus.UNPROCESSABLE_ENTITY,
-        errors: {
-          user: 'userNotExists',
-        },
-      });
+    try {
+      const user = await this.usersRepository.findById(id);
+      if (!user) {
+        throw new NotFoundException({
+          status: HttpStatus.NOT_FOUND,
+          message: 'User not found',
+        });
+      }
+    
+      return {
+        firstName: user.firstName || undefined,
+        lastName: user.lastName || undefined,
+        email: user.email || '',
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Error retrieving user information');
     }
-  
-    return {
-      firstName: user.firstName as string,
-      lastName: user.lastName as string,
-      email: user.email as string,
-    };
   }
 
   findBySocialIdAndProvider({

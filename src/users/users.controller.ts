@@ -24,7 +24,6 @@ import {
 import { Roles } from '../roles/roles.decorator';
 import { RoleEnum } from '../roles/roles.enum';
 import { AuthGuard } from '@nestjs/passport';
-
 import {
   InfinityPaginationResponse,
   InfinityPaginationResponseDto,
@@ -36,9 +35,6 @@ import { UsersService } from './users.service';
 import { RolesGuard } from '../roles/roles.guard';
 import { infinityPagination } from '../utils/infinity-pagination';
 
-@ApiBearerAuth()
-@Roles(RoleEnum.admin)
-@UseGuards(AuthGuard('jwt'), RolesGuard)
 @ApiTags('Users')
 @Controller({
   path: 'users',
@@ -47,25 +43,31 @@ import { infinityPagination } from '../utils/infinity-pagination';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @Post()
+  @ApiBearerAuth()
+  @Roles(RoleEnum.admin)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiCreatedResponse({
     type: User,
   })
   @SerializeOptions({
     groups: ['admin'],
   })
-  @Post()
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createProfileDto: CreateUserDto): Promise<User> {
     return this.usersService.create(createProfileDto);
   }
 
+  @Get()
+  @ApiBearerAuth()
+  @Roles(RoleEnum.admin)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiOkResponse({
     type: InfinityPaginationResponse(User),
   })
   @SerializeOptions({
     groups: ['admin'],
   })
-  @Get()
   @HttpCode(HttpStatus.OK)
   async findAll(
     @Query() query: QueryUserDto,
@@ -89,13 +91,16 @@ export class UsersController {
     );
   }
 
+  @Get(':id')
+  @ApiBearerAuth()
+  @Roles(RoleEnum.admin)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiOkResponse({
     type: User,
   })
   @SerializeOptions({
     groups: ['admin'],
   })
-  @Get(':id')
   @HttpCode(HttpStatus.OK)
   @ApiParam({
     name: 'id',
@@ -106,13 +111,16 @@ export class UsersController {
     return this.usersService.findById(id);
   }
 
+  @Patch(':id')
+  @ApiBearerAuth()
+  @Roles(RoleEnum.admin)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiOkResponse({
     type: User,
   })
   @SerializeOptions({
     groups: ['admin'],
   })
-  @Patch(':id')
   @HttpCode(HttpStatus.OK)
   @ApiParam({
     name: 'id',
@@ -127,6 +135,9 @@ export class UsersController {
   }
 
   @Delete(':id')
+  @ApiBearerAuth()
+  @Roles(RoleEnum.admin)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiParam({
     name: 'id',
     type: String,
@@ -137,6 +148,9 @@ export class UsersController {
     return this.usersService.remove(id);
   }
 
+  @Get(':id/name')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))  // Only requires authentication, no role guard
   @ApiOkResponse({
     schema: {
       type: 'object',
@@ -147,8 +161,6 @@ export class UsersController {
       }
     }
   })
-  @Get(':id/name')
-  @UseGuards(AuthGuard('jwt'))  // Only requires authentication, no specific role
   @HttpCode(HttpStatus.OK)
   @ApiParam({
     name: 'id',
