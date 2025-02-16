@@ -1,98 +1,137 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
-import { ApiProperty } from '@nestjs/swagger';
+export type CartDocument = HydratedDocument<CartSchemaClass>;
 
-export type CartDocument = HydratedDocument<CartClass>;
-
-@Schema({ timestamps: true })
+@Schema({
+  timestamps: true,
+  toJSON: {
+    transform: (_, ret) => {
+      ret._id = ret._id.toString();
+      if (ret.items) {
+        ret.items = ret.items.map((item: any) => ({
+          ...item,
+          price: parseFloat(item.price),
+          productDate: item.productDate?.toISOString(),
+        }));
+      }
+      delete ret.__v;
+      return ret;
+    },
+    virtuals: true,
+  },
+})
 export class CartItemClass {
-  @ApiProperty()
   @Prop({ required: true })
-  productId: string;
+  productItemId: string;
 
-  @ApiProperty()
-  @Prop({ required: true })
-  quantity: number;
-
-  @ApiProperty()
-  @Prop({ required: true })
-  price: number;
-
-  @ApiProperty()
   @Prop({ required: true })
   productName: string;
-  
-  @ApiProperty()
-  @Prop({ required: true }) // Add vendorId as required
+
+  @Prop({ 
+    type: Number,
+    required: true,
+    get: (v: number) => parseFloat((v/100).toFixed(2)),
+    set: (v: number) => Math.round(v * 100)
+  })
+  price: number;
+
+  @Prop({ 
+    type: Number,
+    required: true,
+    min: 1 
+  })
+  quantity: number;
+
+  @Prop({ required: true })
   vendorId: string;
 
-  @ApiProperty()
-  @Prop()
-  productDate?: Date;
+  @Prop({ 
+    type: Date,
+    required: true 
+  })
+  productDate: Date;
 
-  @ApiProperty()
-  @Prop()
-  productStartTime?: string;
+  @Prop({ required: true })
+  productStartTime: string;
+
+  @Prop({ 
+    type: Number,
+    required: true,
+    min: 0
+  })
+  productDuration: number;
 }
 
 @Schema({
   timestamps: true,
   toJSON: {
     transform: (_, ret) => {
-      // Transform the main document _id
-      ret._id = ret._id?.toString();
-      
-      // Transform items array if it exists
-      if (ret.items) {
-        ret.items = ret.items.map(item => ({
-          ...item,
-          _id: item._id?.toString(),
-          productDate: item.productDate ? new Date(item.productDate).toISOString() : undefined
-        }));
-      }
-
-      // Calculate total
-      ret.total = ret.items?.reduce(
-        (sum, item) => sum + (item.price * item.quantity),
-        0
-      ) || 0;
-
-      // Remove mongoose internals
+      ret._id = ret._id.toString();
       delete ret.__v;
-      
       return ret;
     },
     virtuals: true,
-    getters: true,
-  }
+  },
 })
-export class CartClass {
-  @ApiProperty()
+export class CartSchemaClass {
   @Prop({ required: true })
   userId: string;
 
-  @ApiProperty({ type: [CartItemClass] })
-  @Prop({ type: [CartItemClass], default: [] })
+  @Prop({
+    type: [CartItemClass],
+    default: [],
+  })
   items: CartItemClass[];
 
-  @ApiProperty()
-  @Prop({ required: true, default: 0 })
-  total: number;
+  @Prop({ default: false })
+  isCheckingOut: boolean;
+
+  @Prop({ default: Date.now })
+  createdAt: Date;
+
+  @Prop({ default: Date.now })
+  updatedAt: Date;
 }
 
-export const CartSchema = SchemaFactory.createForClass(CartClass);
+export const CartSchema = SchemaFactory.createForClass(CartSchemaClass);
 
-// Add indexes for better query performance
+CartSchema.index({ userId: 1, 'items.productItemId': 1 });
+CartSchema.index({ createdAt: 1 }, { expireAfterSeconds: 86400 });
 CartSchema.index({ userId: 1 });
-CartSchema.index({ 'items.productId': 1 });
 
-// Pre-save hook to calculate total
+CartSchema.virtual('total').get(function() {
+  return this.items.reduce((sum, item) => {
+    return sum + (item.price * item.quantity);
+  }, 0);
+});
+
+CartSchema.virtual('itemCount').get(function() {
+  return this.items.reduce((sum, item) => sum + item.quantity, 0);
+});
+
 CartSchema.pre('save', function(next) {
-  if (this.items) {
-    this.total = this.items.reduce(
-      (sum, item) => sum + (item.price * item.quantity),
-      0
-    );
+  const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+  
+  const invalidTimes = this.items.filter(item => 
+    !timeRegex.test(item.productStartTime)
+  );
+  if (invalidTimes.length > 0) {
+    const error = new Error('Invalid time format. Must be HH:mm in 24-hour format');
+    return next(error);
   }
   next();
 });
+
+CartSchema.methods.getItemTotal = function(productItemId: string): number {
+  const item = this.items.find(item => item.productItemId === productItemId);
+  return item ? item.price * item.quantity : 0;
+};
+
+CartSchema.methods.hasItem = function(productItemId: string): boolean {
+  return this.items.some(item => item.productItemId === productItemId);
+};
+
+CartSchema.methods.getTimeToExpiration = function(): number {
+  const expirationTime = this.createdAt.getTime() + (86400 * 1000); // 24 hours in milliseconds
+  return Math.max(0, expirationTime - Date.now());
+};

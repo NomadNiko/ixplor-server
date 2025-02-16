@@ -30,7 +30,7 @@ export class VendorStripeService {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY', { infer: true }) ?? '',
       {
-        apiVersion: '2023-08-16',
+        apiVersion: '2025-01-27.acacia',
       }
     );
   }

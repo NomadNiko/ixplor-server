@@ -3,7 +3,6 @@ import { UsersModule } from './users/users.module';
 import { FilesModule } from './files/files.module';
 import { AuthModule } from './auth/auth.module';
 import { VendorModule } from './vendors/vendor.module';
-import { ProductModule } from './products/product.module';
 import databaseConfig from './database/config/database.config';
 import authConfig from './auth/config/auth.config';
 import appConfig from './config/app.config';
@@ -36,8 +35,11 @@ import { StripeConnectModule } from './stripe-connect/stripe-connect.module';
 import { StripeModule } from './stripe/stripe.module';
 import { TransactionModule } from './transactions/transaction.module';
 import { TicketModule } from './tickets/ticket.module';
-import { PaymentModule } from './payment/payment.module';
 import { PayoutModule } from './payout/payout.module';
+import { ProductItemModule } from './product-item/product-item.module';
+import { ProductTemplateModule } from './product-template/product-template.module';
+import { InvoiceModule } from './invoice/invoice.module';
+import { SupportTicketModule } from './support-ticket/support-ticket.module';
 
 // <database-block>
 const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
@@ -97,7 +99,6 @@ const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
     UsersModule,
     CartModule,
     VendorModule,
-    ProductModule,
     FilesModule,
     AuthModule,
     AuthFacebookModule,
@@ -111,9 +112,12 @@ const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
     TicketModule,
     StripeConnectModule,
     StripeModule,
-    PaymentModule,
     PayoutModule,
+    ProductItemModule,
+    ProductTemplateModule,
     TransactionModule,
+    InvoiceModule,
+    SupportTicketModule,
   ],
 })
 export class AppModule {}

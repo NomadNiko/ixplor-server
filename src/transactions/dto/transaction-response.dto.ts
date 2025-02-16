@@ -22,7 +22,7 @@ export class TransactionResponseDto {
   customerId: string;
 
   @ApiProperty({ example: '507f1f77bcf86cd799439011' })
-  productId: string;
+  productItemId: string;
 
   @ApiProperty({ enum: TransactionStatus })
   status: TransactionStatus;
@@ -71,6 +71,9 @@ export class TransactionResponseDto {
 
   @ApiPropertyOptional({ example: 'Card declined' })
   error?: string;
+
+  @ApiProperty({ example: '2025-02-11T19:25:21.000Z' })
+  transactionDate: string;  // Added explicit transaction date field
 
   @ApiProperty()
   createdAt: string;

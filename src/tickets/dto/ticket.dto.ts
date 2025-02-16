@@ -18,7 +18,7 @@ export class CreateTicketDto {
 
   @ApiProperty({ example: '507f1f77bcf86cd799439011' })
   @IsString()
-  productId: string;
+  productItemId: string;
 
   @ApiProperty({ example: 'Sunset Sailing Tour' })
   @IsString()
@@ -113,7 +113,7 @@ export class TicketResponseDto {
   vendorId: string;
 
   @ApiProperty({ example: '507f1f77bcf86cd799439011' })
-  productId: string;
+  productItemId: string;
 
   @ApiProperty({ example: 'Sunset Sailing Tour' })
   productName: string;

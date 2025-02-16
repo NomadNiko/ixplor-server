@@ -19,7 +19,7 @@ export class MailService {
     const emailConfirmTitle = await i18n?.translate('common.confirmEmail') || 'Confirm email';
     const text1 = await i18n?.translate('confirm-email.text1') || 'Hey!';
     const text2 = await i18n?.translate('confirm-email.text2') || "You're almost ready to start enjoying";
-    const text3 = await i18n?.translate('confirm-email.text3') || 'Simply click the big green button below to verify your email address.';
+    const text3 = await i18n?.translate('confirm-email.text3') || 'Simply click the big blue button below to verify your email address.';
 
     const url = new URL(
       this.configService.getOrThrow('app.frontendDomain', {
@@ -106,7 +106,7 @@ export class MailService {
     const emailConfirmTitle = await i18n?.translate('common.confirmEmail') || 'Confirm email';
     const text1 = await i18n?.translate('confirm-new-email.text1') || 'Hey!';
     const text2 = await i18n?.translate('confirm-new-email.text2') || 'Confirm your new email address.';
-    const text3 = await i18n?.translate('confirm-new-email.text3') || 'Simply click the big green button below to verify your email address.';
+    const text3 = await i18n?.translate('confirm-new-email.text3') || 'Simply click the big blue button below to verify your email address.';
 
     const url = new URL(
       this.configService.getOrThrow('app.frontendDomain', {

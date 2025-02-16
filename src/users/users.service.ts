@@ -2,6 +2,7 @@ import {
   HttpStatus,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -157,6 +158,29 @@ export class UsersService {
 
   findByEmail(email: User['email']): Promise<NullableType<User>> {
     return this.usersRepository.findByEmail(email);
+  }
+
+  async getUserName(id: User['id']): Promise<{ firstName?: string; lastName?: string; email: string }> {
+    try {
+      const user = await this.usersRepository.findById(id);
+      if (!user) {
+        throw new NotFoundException({
+          status: HttpStatus.NOT_FOUND,
+          message: 'User not found',
+        });
+      }
+    
+      return {
+        firstName: user.firstName || undefined,
+        lastName: user.lastName || undefined,
+        email: user.email || '',
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Error retrieving user information');
+    }
   }
 
   findBySocialIdAndProvider({
