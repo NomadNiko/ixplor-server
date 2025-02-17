@@ -75,25 +75,6 @@ export class StripeService {
         throw new Error('Invalid total amount');
       }
 
-      const firstItem = items[0];
-      if (!firstItem.vendorId) {
-        throw new Error('Vendor ID is required');
-      }
-
-      const vendor = await this.vendorService.getStripeStatus(
-        firstItem.vendorId,
-      );
-      if (!vendor?.data?.stripeConnectId) {
-        throw new Error('Vendor not configured for payments');
-      }
-
-      const compactItemsMetadata = items.map(item => ({
-        id: item.productItemId,
-        q: item.quantity,
-        d: new Date(item.productDate).toISOString().split('T')[0],
-        t: item.productStartTime
-      }));
-
       const sessionParams: EmbeddedCheckoutParams = {
         ui_mode: 'embedded',
         return_url: returnUrl,
@@ -113,16 +94,9 @@ export class StripeService {
           quantity: item.quantity,
         })),
         mode: 'payment',
-        metadata: {
-          customerId,
-          vendorId: firstItem.vendorId,
-          itemCount: items.length.toString(),
-          items: JSON.stringify(compactItemsMetadata)
-        },
         payment_intent_data: {
           metadata: {
-            customerId,
-            vendorId: firstItem.vendorId,
+            customerId
           },
         },
       };
@@ -135,7 +109,6 @@ export class StripeService {
         stripeCheckoutSessionId: session.id,
         amount: totalAmount,
         currency: 'usd',
-        vendorId: firstItem.vendorId,
         customerId,
         productItemIds: items.map(item => item.productItemId),
         description: `Payment for ${items.length} item(s)`,

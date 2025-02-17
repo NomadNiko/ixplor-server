@@ -23,46 +23,54 @@ export class InvoiceItemDto {
   productDuration: number;
 }
 
-export class InvoiceResponseDto {
-  @ApiProperty({ example: '67a9c06a2326aeb6e228babb' })
-  _id: string;
-
-  @ApiProperty({ example: 'cs_test_b1TpfvUsp3K6vqqAcCbNlcq2aXGkQlM76Kp9sogqu6ohnseqwJkEETydDV' })
-  stripeCheckoutSessionId: string;
-
-  @ApiProperty({ example: 203.00 })
-  amount: number;
-
-  @ApiProperty({ example: 'usd' })
-  currency: string;
-
-  @ApiProperty({ example: '67a56b620c52dd570aa42e3d' })
+export class VendorGroupDto {
+  @ApiProperty()
   vendorId: string;
 
-  @ApiProperty({ example: 'Beach Adventures LLC' })
+  @ApiProperty()
   vendorName: string;
 
-  @ApiProperty({ example: '67a56af00c52dd570aa42e31' })
-  customerId: string;
-
-  @ApiProperty({ example: 'John Doe' })
-  customerName: string;
-
-  @ApiProperty({ type: [String], example: ['67a595d60c52dd570aa42f5b'] })
-  productItemIds: string[];
+  @ApiProperty()
+  subtotal: number;
 
   @ApiProperty({ type: [InvoiceItemDto] })
   items: InvoiceItemDto[];
+}
 
-  @ApiProperty({ example: 'succeeded' })
+export class InvoiceResponseDto {
+  @ApiProperty()
+  _id: string;
+
+  @ApiProperty()
+  stripeCheckoutSessionId: string;
+
+  @ApiProperty()
+  amount: number;
+
+  @ApiProperty()
+  currency: string;
+
+  @ApiProperty()
+  customerId: string;
+
+  @ApiProperty()
+  customerName: string;
+
+  @ApiProperty({ type: [String] })
+  productItemIds: string[];
+
+  @ApiProperty({ type: [VendorGroupDto] })
+  vendorGroups: VendorGroupDto[];
+
+  @ApiProperty()
   status: string;
 
-  @ApiProperty({ example: 'payment' })
+  @ApiProperty()
   type: string;
 
-  @ApiProperty({ example: '2025-02-11T19:25:21.000Z' })
-  invoiceDate: string;  // Added invoice date field
+  @ApiProperty()
+  invoiceDate: string;
 
-  @ApiProperty({ example: 'Payment for 5 item(s)' })
+  @ApiProperty()
   description: string;
 }

@@ -77,9 +77,6 @@ export class TransactionSchemaClass {
   @Prop({ required: true })
   currency: string;
 
-  @Prop({ required: true })
-  vendorId: string;
-
   @Prop({
     required: function (this: TransactionSchemaClass) {
       return this.type === TransactionType.PAYMENT;

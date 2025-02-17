@@ -102,7 +102,6 @@ export class TransactionService {
       stripeCheckoutSessionId: transaction.stripeCheckoutSessionId,
       amount: transaction.amount,
       currency: transaction.currency,
-      vendorId: transaction.vendorId,
       customerId: transaction.customerId,
       productItemIds: transaction.productItemIds,
       status: transaction.status,
@@ -127,11 +126,34 @@ export class TransactionService {
   async findByVendorId(vendorId: string) {
     try {
       const transactions = await this.transactionModel
-        .find({ vendorId })
+        .find({
+          'metadata.items': {
+            $regex: `"vendorId":"${vendorId}"`,
+          }
+        })
         .sort({ createdAt: -1 });
   
+      // Now we need to filter the items to only show the relevant ones for this vendor
+      const filteredTransactions = transactions.map(transaction => {
+        if (!transaction.metadata){
+          console.log("ERROR: No metadata in Transaction Found. Contact Niko Now!");
+          throw new InternalServerErrorException('No metadata in Transaction Found.');
+        }
+        const parsedItems = JSON.parse(transaction.metadata.items || '[]');
+
+        const vendorItems = parsedItems.filter(item => item.vendorId === vendorId);
+        
+        return {
+          ...this.transformTransaction(transaction),
+          metadata: {
+            ...transaction.metadata,
+            items: JSON.stringify(vendorItems)
+          }
+        };
+      });
+  
       return {
-        data: transactions.map(transaction => this.transformTransaction(transaction)),
+        data: filteredTransactions,
       };
     } catch (error) {
       console.error('Error finding transactions for vendor:', error);

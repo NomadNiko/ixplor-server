@@ -44,13 +44,10 @@ export class InvoiceController {
     // Check access permissions
     const hasAccess = 
       req.user.role?.id === 1 || // Admin
-      req.user.id === invoice.customerId || // Customer
-      await this.invoiceService.isUserAssociatedWithVendor(req.user.id, invoice.vendorId); // Vendor
-
+      req.user.id === invoice.customerId;
     if (!hasAccess) {
       throw new NotFoundException('Invoice not found');
     }
-
     return invoice;
   }
 }
