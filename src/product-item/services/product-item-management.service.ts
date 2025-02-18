@@ -28,18 +28,16 @@ export class ProductItemManagementService {
       if (!template) {
         throw new NotFoundException(`Template with ID ${templateId} not found`);
       }
-
-      // Extract and validate coordinates
+  
       const longitude = Number(createItemDto.longitude || template.data.location?.coordinates[0]);
       const latitude = Number(createItemDto.latitude || template.data.location?.coordinates[1]);
-
-      // Validate coordinates
+      
       if (isNaN(longitude) || isNaN(latitude) || 
           longitude < -180 || longitude > 180 || 
           latitude < -90 || latitude > 90) {
         throw new BadRequestException('Invalid coordinates provided');
       }
-
+  
       const itemData = {
         templateId,
         vendorId: template.data.vendorId,
@@ -67,10 +65,10 @@ export class ProductItemManagementService {
         additionalInfo: template.data.additionalInfo,
         itemStatus: ProductItemStatusEnum.PUBLISHED,
       };
-
+  
       const createdItem = new this.itemModel(itemData);
       const item = await createdItem.save();
-
+  
       return {
         data: this.transformService.transformItemResponse(item),
         message: 'Product item created successfully',

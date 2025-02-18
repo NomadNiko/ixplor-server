@@ -249,7 +249,7 @@ export class StripeService {
         }
       }
   
-      await this.cartService.deleteCart(customerId);
+      await this.cartService.clearCart(customerId);
   
     } catch (error) {
       console.error('Error processing successful checkout:', error);
