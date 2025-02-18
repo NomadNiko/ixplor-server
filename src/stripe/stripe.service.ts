@@ -103,6 +103,7 @@ export class StripeService {
         })),
         mode: 'payment',
         metadata: {
+          customerId,
           items: JSON.stringify(compactItemsMetadata)
         },
         payment_intent_data: {
