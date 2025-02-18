@@ -44,10 +44,12 @@ export class PayoutService {
 
   async findByVendor(vendorId: string) {
     try {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+  
       const payouts = await this.payoutModel
         .find({ vendorId })
         .sort({ createdAt: -1 });
-
+  
       return {
         data: payouts.map(this.transformPayout)
       };
