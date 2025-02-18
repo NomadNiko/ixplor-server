@@ -218,11 +218,6 @@ export class StripeService {
         }
   
         try {
-          await this.productItemService.updateQuantityForPurchase(
-            item.id,
-            item.q
-          );
-  
           for (let i = 0; i < item.q; i++) {
             await this.ticketService.createTicket({
               userId: customerId,
@@ -249,7 +244,7 @@ export class StripeService {
         }
       }
   
-      await this.cartService.clearCart(customerId);
+      await this.cartService.deleteCart(customerId);
   
     } catch (error) {
       console.error('Error processing successful checkout:', error);
