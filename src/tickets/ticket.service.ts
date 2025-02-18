@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, forwardRef, Inject, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { 
@@ -69,16 +69,6 @@ export class TicketService {
 
         if (!ticketData.productPrice) {
           throw new BadRequestException('Product price is required');
-        }
-
-        if (ticketData.productItemId) {
-          const isAvailable = await this.productItemService.validateAvailability(
-            ticketData.productItemId,
-            ticketData.quantity || 1
-          );
-          if (!isAvailable) {
-            throw new BadRequestException('Product item is no longer available');
-          }
         }
 
         const vendorOwed = ticketData.productPrice * (1 - (vendor.vendorApplicationFee || 0.13));
