@@ -75,6 +75,14 @@ export class StripeService {
         throw new Error('Invalid total amount');
       }
 
+      
+      const compactItemsMetadata = items.map(item => ({
+        id: item.productItemId,
+        q: item.quantity,
+        d: new Date(item.productDate).toISOString().split('T')[0],
+        t: item.productStartTime
+      }));
+
       const sessionParams: EmbeddedCheckoutParams = {
         ui_mode: 'embedded',
         return_url: returnUrl,
@@ -94,6 +102,9 @@ export class StripeService {
           quantity: item.quantity,
         })),
         mode: 'payment',
+        metadata: {
+          items: JSON.stringify(compactItemsMetadata)
+        },
         payment_intent_data: {
           metadata: {
             customerId
