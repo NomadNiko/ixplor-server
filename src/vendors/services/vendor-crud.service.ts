@@ -123,21 +123,27 @@ export class VendorCrudService {
     }
   }
 
-  async update(id: string, updateData: UpdateVendorDto) {
+  async update(id: string, updateData: any) {
     try {
+      // Check if the update data contains operators like $inc
+      const hasOperators = Object.keys(updateData).some(key => key.startsWith('$'));
+      
+      // If using MongoDB operators directly, don't wrap in $set
+      const updateOperation = hasOperators ? updateData : { $set: updateData };
+      
       const updatedVendor = await this.vendorModel
         .findByIdAndUpdate(
           id,
-          { $set: updateData },
+          updateOperation,
           { new: true, runValidators: true },
         )
         .lean()
         .exec();
-
+  
       if (!updatedVendor) {
         throw new NotFoundException(`Vendor with ID ${id} not found`);
       }
-
+  
       return {
         data: transformVendorResponse(updatedVendor),
         message: 'Vendor updated successfully',
@@ -150,7 +156,7 @@ export class VendorCrudService {
       throw new InternalServerErrorException('Failed to update vendor');
     }
   }
-
+  
   async remove(id: string) {
     try {
       const vendor = await this.vendorModel.findById(id);

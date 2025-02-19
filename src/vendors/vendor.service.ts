@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { VendorCrudService } from './services/vendor-crud.service';
 import { VendorSearchService } from './services/vendor-search.service';
 import { VendorStripeService } from './services/vendor-stripe.service';
@@ -18,6 +18,7 @@ export class VendorService {
     private readonly vendorOwnerService: VendorOwnerService,
     private readonly vendorProductService: VendorProductService,
   ) {}
+
 
   // CRUD Operations
   async findAllVendors() {
@@ -131,5 +132,20 @@ export class VendorService {
 
   async getVendorProductStats(vendorId: string) {
     return this.vendorProductService.getVendorProductStats(vendorId);
+  }
+
+  
+  async updateVendorBalance(vendorId: string, amountChange: number): Promise<void> {
+    try {
+      // Use the crud service to update the vendor
+      await this.vendorCrudService.update(vendorId, {
+        $inc: { internalAccountBalance: amountChange }
+      });
+      
+      console.log(`Adjusted vendor ${vendorId} balance by ${amountChange}`);
+    } catch (error) {
+      console.error(`Error adjusting vendor balance: ${error.message}`);
+      throw error;
+    }
   }
 }

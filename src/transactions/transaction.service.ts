@@ -160,6 +160,55 @@ export class TransactionService {
     return transaction;
   }
 
+  async addPartialRefund({
+    transactionId,
+    ticketId,
+    refundId,
+    amount,
+    reason
+  }: {
+    transactionId: string;
+    ticketId: string;
+    refundId: string;
+    amount: number;
+    reason?: string;
+  }): Promise<any> {
+    try {
+      // Create the partial refund entry
+      const partialRefund = {
+        ticketId,
+        refundId,
+        amount,
+        reason,
+        refundedAt: new Date()
+      };
+      
+      // Update the transaction to add this refund to the partialRefunds array
+      const updatedTransaction = await this.transactionModel.findByIdAndUpdate(
+        transactionId,
+        { 
+          $push: { partialRefunds: partialRefund },
+          // If this is the first partial refund, update status to partially refunded
+          $set: { 
+            status: TransactionStatus.PARTIALLY_REFUNDED,
+            updatedAt: new Date()
+          }
+        },
+        { new: true }
+      );
+      
+      if (!updatedTransaction) {
+        throw new NotFoundException(`Transaction with ID ${transactionId} not found`);
+      }
+      
+      console.log(`Added partial refund of ${amount/100} for ticket ${ticketId} to transaction ${transactionId}`);
+      return updatedTransaction;
+    } catch (error) {
+      console.error(`Error adding partial refund to transaction ${transactionId}:`, error);
+      throw new InternalServerErrorException('Failed to record partial refund');
+    }
+  }
+
   async findByVendorId(vendorId: string) {
     try {
       const transactions = await this.transactionModel

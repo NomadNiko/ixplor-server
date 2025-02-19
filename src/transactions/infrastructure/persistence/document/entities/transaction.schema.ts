@@ -70,86 +70,100 @@ export class TransactionSchemaClass {
     },
   })
   stripeCheckoutSessionId?: string;
-  
+
   @Prop()
   paymentIntentId?: string;
-  
+
   @Prop({ required: true })
   amount: number;
-  
+
   @Prop({ required: true })
   currency: string;
-  
+
   @Prop({
     required: function (this: TransactionSchemaClass) {
       return this.type === TransactionType.PAYMENT;
     },
   })
   customerId?: string;
-  
+
   @Prop({
     required: function (this: TransactionSchemaClass) {
       return this.type === TransactionType.PAYMENT;
     },
-    type: [String]
+    type: [String],
   })
   productItemIds?: string[];
-  
+
   @Prop({
     type: String,
     enum: TransactionStatus,
     default: TransactionStatus.PENDING,
   })
   status: TransactionStatus;
-  
+
   @Prop({
     type: String,
     enum: TransactionType,
     required: true,
   })
   type: TransactionType;
-  
+
   @Prop({ type: Object })
   paymentMethodDetails?: StripePaymentMethodDetails;
-  
+
   @Prop()
   description?: string;
-  
+
   @Prop()
   receiptEmail?: string;
-  
+
   @Prop({ type: Object })
   metadata?: Record<string, any>;
-  
+
   @Prop()
   refundId?: string;
-  
+
   @Prop()
   refundAmount?: number;
-  
+
   @Prop()
   refundReason?: string;
-  
+
   @Prop()
   disputeId?: string;
-  
+
   @Prop()
   disputeStatus?: string;
-  
+
   @Prop()
   disputeAmount?: number;
-  
+
   @Prop()
   error?: string;
+
+  @Prop({ type: [Object], default: [] })
+partialRefunds?: Array<{
+  ticketId: string;
+  refundId: string;
+  amount: number;
+  reason?: string;
+  refundedAt: Date;
+}>;
 }
 
-export const TransactionSchema = SchemaFactory.createForClass(TransactionSchemaClass);
+export const TransactionSchema = SchemaFactory.createForClass(
+  TransactionSchemaClass,
+);
 
-TransactionSchema.index({ stripeCheckoutSessionId: 1 }, { unique: true, partialFilterExpression: { type: TransactionType.PAYMENT } });
+TransactionSchema.index(
+  { stripeCheckoutSessionId: 1 },
+  { unique: true, partialFilterExpression: { type: TransactionType.PAYMENT } },
+);
 TransactionSchema.index({ paymentIntentId: 1 }, { sparse: true });
 TransactionSchema.index({ vendorId: 1 });
 TransactionSchema.index({ customerId: 1 });
-TransactionSchema.index({ "productItemIds": 1 });
+TransactionSchema.index({ productItemIds: 1 });
 TransactionSchema.index({ status: 1 });
 TransactionSchema.index({ type: 1 });
 TransactionSchema.index({ createdAt: 1 });

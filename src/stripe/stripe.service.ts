@@ -15,7 +15,7 @@ import { ProductItemService } from '../product-item/product-item.service';
 import { TicketService } from '../tickets/ticket.service';
 import { PayoutSchemaClass } from '../payout/infrastructure/persistence/document/entities/payout.schema';
 import { PayoutStatus } from '../payout/infrastructure/persistence/document/entities/payout.schema';
-
+import { TicketStatus } from '../tickets/infrastructure/persistence/document/entities/ticket.schema';
 
 // Updated interface to match new Stripe types
 interface CustomSession extends Omit<Stripe.Checkout.Session, 'client_secret'> {
@@ -49,6 +49,7 @@ export class StripeService {
       },
     );
   }
+
   async createCheckoutSession({
     items,
     customerId,
@@ -148,132 +149,130 @@ export class StripeService {
       );
     }
   }
-
   
-async handleWebhookEvent(signature: string, payload: any) {
-  try {
-    const event = typeof payload === 'string' ? JSON.parse(payload) : payload;
-    console.log('Processing webhook event type:', event.type);
-    
-    switch (event.type) {
-      case 'checkout.session.completed':
-        await this.handleCheckoutSessionCompleted(
-          event.data.object as Stripe.Checkout.Session,
-        );
-        break;
-        
-      case 'payment_intent.payment_failed':
-        await this.handlePaymentFailed(
-          event.data.object as Stripe.PaymentIntent,
-        );
-        break;
-        
-      case 'checkout.session.expired':
-        await this.handleCheckoutSessionExpired(
-          event.data.object as Stripe.Checkout.Session,
-        );
-        break;
-        
-      case 'charge.refunded':
-        // Extract payment_intent directly from the webhook data
-        const refundObject = event.data.object;
-        if (refundObject && refundObject.payment_intent) {
-          await this.handleRefund(refundObject.payment_intent, refundObject);
-          console.log(`Processing refund for payment intent: ${refundObject.payment_intent}`);
-        } else {
-          console.error('Missing payment_intent in charge.refunded webhook:', JSON.stringify(refundObject));
-        }
-        break;
-        
-      case 'charge.dispute.created':
-        await this.handleDisputeCreated(event.data.object as Stripe.Dispute);
-        break;
-    }
-    
-    return { received: true };
-  } catch (error) {
-    console.error('Error handling webhook:', error);
-    throw new InternalServerErrorException('Webhook handling failed');
-  }
-}
-
-private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
-  try {
-    // Extract payment_intent directly from the session object
-    const paymentIntentId = session.payment_intent as string;
-    if (!paymentIntentId) {
-      console.error('Missing payment intent ID in checkout session:', JSON.stringify(session));
-      throw new Error('Missing payment intent ID in checkout session');
-    }
-
-    console.log(`Storing payment intent ID ${paymentIntentId} for checkout session ${session.id}`);
-    
-    // Store the payment intent ID during checkout completion
-    await this.transactionService.updateTransactionStatus(
-      session.id,
-      TransactionStatus.SUCCEEDED,
-      {
-        receiptEmail: session.customer_email || undefined,
-        paymentIntentId: paymentIntentId,
-      },
-    );
-
-  
-      if (!session.metadata?.customerId || !session.metadata?.items) {
-        throw new Error('Missing required metadata in checkout session');
-      }
-  
-      const customerId = session.metadata.customerId;
-      const items = JSON.parse(session.metadata.items) as Array<{
-        id: string;
-        q: number;
-        d: string;
-        t: string;
-      }>;
-  
-      for (const item of items) {
-        const productItem = await this.productItemService.findById(item.id);
-        if (!productItem?.data) {
-          console.error(`Product item ${item.id} not found`);
-          continue;
-        }
-  
-        try {
-          for (let i = 0; i < item.q; i++) {
-            await this.ticketService.createTicket({
-              userId: customerId,
-              transactionId: session.id,
-              vendorId: productItem.data.vendorId,
-              productItemId: item.id,
-              productName: productItem.data.templateName,
-              productDescription: productItem.data.description,
-              productPrice: productItem.data.price,
-              productType: productItem.data.productType,
-              productDate: new Date(item.d),
-              productStartTime: item.t,
-              productDuration: productItem.data.duration,
-              productLocation: productItem.data.location,
-              productImageURL: productItem.data.imageURL,
-              productAdditionalInfo: productItem.data.additionalInfo,
-              productRequirements: productItem.data.requirements,
-              productWaiver: productItem.data.waiver,
-              quantity: 1,
-            });
+  async handleWebhookEvent(signature: string, payload: any) {
+    try {
+      const event = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      console.log('Processing webhook event type:', event.type);
+      
+      switch (event.type) {
+        case 'checkout.session.completed':
+          await this.handleCheckoutSessionCompleted(
+            event.data.object as Stripe.Checkout.Session,
+          );
+          break;
+          
+        case 'payment_intent.payment_failed':
+          await this.handlePaymentFailed(
+            event.data.object as Stripe.PaymentIntent,
+          );
+          break;
+          
+        case 'checkout.session.expired':
+          await this.handleCheckoutSessionExpired(
+            event.data.object as Stripe.Checkout.Session,
+          );
+          break;
+          
+        case 'charge.refunded':
+          // Extract payment_intent directly from the webhook data
+          const refundObject = event.data.object;
+          if (refundObject && refundObject.payment_intent) {
+            await this.handleRefund(refundObject.payment_intent, refundObject);
+            console.log(`Processing refund for payment intent: ${refundObject.payment_intent}`);
+          } else {
+            console.error('Missing payment_intent in charge.refunded webhook:', JSON.stringify(refundObject));
           }
-        } catch (error) {
-          console.error(`Error processing item ${item.id}:`, error);
-        }
+          break;
+          
+        case 'charge.dispute.created':
+          await this.handleDisputeCreated(event.data.object as Stripe.Dispute);
+          break;
       }
-  
-      await this.cartService.deleteCart(customerId);
-  
+      
+      return { received: true };
     } catch (error) {
-      console.error('Error processing successful checkout:', error);
-      throw error;
+      console.error('Error handling webhook:', error);
+      throw new InternalServerErrorException('Webhook handling failed');
     }
   }
-  
 
+  private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+    try {
+      // Extract payment_intent directly from the session object
+      const paymentIntentId = session.payment_intent as string;
+      if (!paymentIntentId) {
+        console.error('Missing payment intent ID in checkout session:', JSON.stringify(session));
+        throw new Error('Missing payment intent ID in checkout session');
+      }
+
+      console.log(`Storing payment intent ID ${paymentIntentId} for checkout session ${session.id}`);
+      
+      // Store the payment intent ID during checkout completion
+      await this.transactionService.updateTransactionStatus(
+        session.id,
+        TransactionStatus.SUCCEEDED,
+        {
+          receiptEmail: session.customer_email || undefined,
+          paymentIntentId: paymentIntentId,
+        },
+      );
+
+    
+        if (!session.metadata?.customerId || !session.metadata?.items) {
+          throw new Error('Missing required metadata in checkout session');
+        }
+    
+        const customerId = session.metadata.customerId;
+        const items = JSON.parse(session.metadata.items) as Array<{
+          id: string;
+          q: number;
+          d: string;
+          t: string;
+        }>;
+    
+        for (const item of items) {
+          const productItem = await this.productItemService.findById(item.id);
+          if (!productItem?.data) {
+            console.error(`Product item ${item.id} not found`);
+            continue;
+          }
+    
+          try {
+            for (let i = 0; i < item.q; i++) {
+              await this.ticketService.createTicket({
+                userId: customerId,
+                transactionId: session.id,
+                vendorId: productItem.data.vendorId,
+                productItemId: item.id,
+                productName: productItem.data.templateName,
+                productDescription: productItem.data.description,
+                productPrice: productItem.data.price,
+                productType: productItem.data.productType,
+                productDate: new Date(item.d),
+                productStartTime: item.t,
+                productDuration: productItem.data.duration,
+                productLocation: productItem.data.location,
+                productImageURL: productItem.data.imageURL,
+                productAdditionalInfo: productItem.data.additionalInfo,
+                productRequirements: productItem.data.requirements,
+                productWaiver: productItem.data.waiver,
+                quantity: 1,
+              });
+            }
+          } catch (error) {
+            console.error(`Error processing item ${item.id}:`, error);
+          }
+        }
+    
+        await this.cartService.deleteCart(customerId);
+    
+      } catch (error) {
+        console.error('Error processing successful checkout:', error);
+        throw error;
+      }
+    }
+    
   private async handleCheckoutSessionExpired(session: Stripe.Checkout.Session) {
     try {
       if (!session.metadata?.customerId) {
@@ -301,90 +300,62 @@ private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
     );
   }
 
-  private async handleRefund(paymentIntentId: string, refundData: any) {
+  private handleRefund(paymentIntentId: string, refundData: any) {
     try {
-      console.log(`Processing refund for payment intent: ${paymentIntentId}`);
+      // Just log the successful refund
+      console.log(`Received successful refund confirmation for payment intent: ${paymentIntentId}`);
+      console.log(`Refund amount: ${refundData.amount_refunded/100}`);
       
-      // Find transaction by payment intent ID
-      const transaction = await this.transactionService.findByPaymentIntentId(paymentIntentId);
-      
-      if (!transaction) {
-        console.error(`Transaction not found for payment intent ID: ${paymentIntentId}`);
-        return;
-      }
-      
-      // Extract refund details from the refund data
-      const refundAmount = refundData.amount_refunded || 0;
-      let refundId, refundReason;
-      
-      if (refundData.refunds && refundData.refunds.data && refundData.refunds.data.length > 0) {
-        refundId = refundData.refunds.data[0].id;
-        refundReason = refundData.refunds.data[0].reason;
-      }
-      
-      // Update transaction status
-      await this.transactionService.updateTransactionStatusByPaymentIntentId(
-        paymentIntentId,
-        TransactionStatus.REFUNDED,
-        {
-          refundId,
-          refundAmount,
-          refundReason,
-        },
-      );
-      
-      // Update tickets if transaction has checkout session ID
-      if (transaction.stripeCheckoutSessionId) {
-        await this.ticketService.updateTicketsForRefundedTransaction(
-          transaction.stripeCheckoutSessionId
-        );
-        console.log(`Updated tickets for checkout session: ${transaction.stripeCheckoutSessionId}`);
-      } else {
-        console.error(
-          `No checkout session ID found for transaction with payment intent ${paymentIntentId}`
-        );
-      }
-      
-      console.log(`Successfully processed refund for payment intent ${paymentIntentId}`);
+      // No status changes or ticket cancellations - everything was handled proactively
     } catch (error) {
-      console.error(`Error processing refund for payment intent ${paymentIntentId}:`, error);
+      console.error(`Error logging refund for payment intent ${paymentIntentId}:`, error);
     }
   }
 
-  async issueTicketRefund(ticketId: string): Promise<any> {
+  async issueTicketRefund(ticketId: string, reason?: string): Promise<any> {
     try {
-      // Get the ticket
+      // 1. Find the ticket
       const ticket = await this.ticketService.findById(ticketId);
       if (!ticket) {
         throw new NotFoundException(`Ticket with ID ${ticketId} not found`);
       }
-  
-      // Get the transaction using transactionId from the ticket
+      
+      // 2. Check if ticket was redeemed and reclaim money from vendor if needed
+      if (ticket.status === TicketStatus.REDEEMED && !ticket.vendorPaid) {
+        await this.reclaimVendorFunds(ticket.vendorId, ticket.vendorOwed);
+      }
+      
+      // 3. Mark ticket as cancelled
+      await this.ticketService.updateStatus(
+        ticketId,
+        TicketStatus.CANCELLED,
+        {
+          reason: reason || 'Refunded',
+          updatedBy: 'system'
+        }
+      );
+      
+      // 4. Find the transaction
       let transaction;
       try {
-        // Try to get it directly first
         transaction = await this.transactionService.findByCheckoutSessionId(ticket.transactionId);
       } catch (error) {
-        // If not found directly, try with findById which returns {data: transaction}
         const transactionResponse = await this.transactionService.findById(ticket.transactionId);
         transaction = transactionResponse.data;
       }
-  
+      
       if (!transaction) {
         throw new NotFoundException(`Transaction for ticket ${ticketId} not found`);
       }
-  
-      // Ensure we have a payment intent ID
+      
       if (!transaction.paymentIntentId) {
-        throw new BadRequestException(
-          `No payment intent ID found for transaction ${ticket.transactionId}`
-        );
+        throw new BadRequestException(`No payment intent ID found for transaction ${ticket.transactionId}`);
       }
-  
-      // Calculate the amount to refund (ticket price in cents)
+      
+      // 5. Calculate refund amount
       const refundAmount = Math.round(ticket.productPrice * 100);
-  
-      // Issue the refund through Stripe
+      
+      // 6. Send refund to Stripe
       const refund = await this.stripe.refunds.create({
         payment_intent: transaction.paymentIntentId,
         amount: refundAmount,
@@ -393,8 +364,17 @@ private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
           transactionId: transaction._id.toString()
         }
       });
-  
-      console.log(`Refund initiated for ticket ${ticketId}, amount: ${refundAmount / 100}`);
+      
+      // 7. Record partial refund in transaction
+      await this.transactionService.addPartialRefund({
+        transactionId: transaction._id,
+        ticketId: ticketId,
+        refundId: refund.id,
+        amount: refundAmount,
+        reason: reason || 'Customer requested refund'
+      });
+      
+      console.log(`Refund issued for ticket ${ticketId}, amount: ${refundAmount / 100}`);
       return refund;
     } catch (error) {
       console.error(`Error issuing refund for ticket ${ticketId}:`, error);
@@ -404,35 +384,86 @@ private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
       throw new InternalServerErrorException('Failed to process ticket refund');
     }
   }
-
-
+  
   async issueTransactionRefund(transactionId: string): Promise<any> {
     try {
-      // Get the transaction
+      // 1. Get transaction
       const transactionResponse = await this.transactionService.findById(transactionId);
       const transaction = transactionResponse.data;
       
       if (!transaction) {
         throw new NotFoundException(`Transaction with ID ${transactionId} not found`);
       }
-  
-      // Ensure we have a payment intent ID
+      
       if (!transaction.paymentIntentId) {
-        throw new BadRequestException(
-          `No payment intent ID found for transaction ${transactionId}`
+        throw new BadRequestException(`No payment intent ID found for transaction ${transactionId}`);
+      }
+      
+      // 2. Find all tickets for this transaction
+      const tickets = await this.ticketService.findByTransactionId(transaction.stripeCheckoutSessionId);
+      const activeOrRedeemedTickets = tickets.filter(ticket => 
+        ticket.status === TicketStatus.ACTIVE || ticket.status === TicketStatus.REDEEMED
+      );
+      
+      // 3. Process each ticket
+      for (const ticket of activeOrRedeemedTickets) {
+        // Reclaim money from vendor if ticket was redeemed and not paid
+        if (ticket.status === TicketStatus.REDEEMED && !ticket.vendorPaid) {
+          await this.reclaimVendorFunds(ticket.vendorId, ticket.vendorOwed);
+        }
+        
+        // Mark ticket as cancelled
+        await this.ticketService.updateStatus(
+          ticket._id,
+          TicketStatus.CANCELLED,
+          {
+            reason: 'Full transaction refund',
+            updatedBy: 'system'
+          }
         );
       }
-  
-      // Issue a full refund through Stripe
+      
+      // 4. Calculate remaining amount for refund
+      // Get transaction with partial refunds
+      const refundDataResponse = await this.transactionService.findById(transactionId);
+      let totalPartialRefunds = 0;
+      
+      // Try to get partial refunds if they exist
+      if (refundDataResponse.data && 
+          typeof refundDataResponse.data === 'object' && 
+          'partialRefunds' in refundDataResponse.data &&
+          Array.isArray(refundDataResponse.data.partialRefunds)) {
+        
+        totalPartialRefunds = refundDataResponse.data.partialRefunds.reduce(
+          (sum, refund) => sum + (refund.amount || 0), 0
+        );
+      }
+      
+      const remainingAmount = Math.round(transaction.amount * 100) - totalPartialRefunds;
+      
+      if (remainingAmount <= 0) {
+        throw new BadRequestException('Transaction is already fully refunded');
+      }
+      
+      // 5. Mark transaction as refunded
+      await this.transactionService.updateTransactionStatus(
+        transactionId,
+        TransactionStatus.REFUNDED
+      );
+      
+      // 6. Issue the refund with Stripe
       const refund = await this.stripe.refunds.create({
         payment_intent: transaction.paymentIntentId,
+        amount: remainingAmount,
         metadata: {
-          transactionId: transactionId
+          transactionId: transactionId,
+          isFullRefund: 'true'
         }
       });
-  
-      console.log(`Full refund initiated for transaction ${transactionId}`);
+      
+      console.log(`Full refund initiated for transaction ${transactionId}, amount: ${remainingAmount/100}`);
       return refund;
+      
     } catch (error) {
       console.error(`Error issuing refund for transaction ${transactionId}:`, error);
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
@@ -501,6 +532,18 @@ private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
       throw new InternalServerErrorException(
         'Failed to process transfer webhook',
       );
+    }
+  }
+
+  private async reclaimVendorFunds(vendorId: string, amount: number): Promise<void> {
+    try {
+      // Update vendor balance using the vendor service
+      await this.vendorService.updateVendorBalance(vendorId, -amount);
+      
+      console.log(`Reclaimed ${amount} from vendor ${vendorId}`);
+    } catch (error) {
+      console.error(`Failed to reclaim funds from vendor ${vendorId}:`, error);
+      throw new InternalServerErrorException('Failed to reclaim funds from vendor');
     }
   }
 }
