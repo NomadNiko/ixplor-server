@@ -100,6 +100,7 @@ export class TransactionService {
     return {
       _id: transaction._id.toString(),
       stripeCheckoutSessionId: transaction.stripeCheckoutSessionId,
+      paymentIntentId: transaction.paymentIntentId, // Add this line
       amount: transaction.amount,
       currency: transaction.currency,
       customerId: transaction.customerId,
@@ -121,6 +122,42 @@ export class TransactionService {
       createdAt: transaction.createdAt?.toISOString(),
       updatedAt: transaction.updatedAt?.toISOString()
     };
+  }
+
+  async findByPaymentIntentId(paymentIntentId: string) {
+    const transaction = await this.transactionModel.findOne({ 
+      paymentIntentId: paymentIntentId 
+    });
+    
+    if (!transaction) {
+      return null;
+    }
+    
+    return transaction;
+  }
+  
+  async updateTransactionStatusByPaymentIntentId(
+    paymentIntentId: string, 
+    status: TransactionStatus,
+    additionalData: Partial<TransactionSchemaClass> = {}
+  ) {
+    const transaction = await this.transactionModel.findOneAndUpdate(
+      { paymentIntentId: paymentIntentId },
+      { 
+        $set: {
+          status,
+          ...additionalData,
+          updatedAt: new Date()
+        }
+      },
+      { new: true }
+    );
+    
+    if (!transaction) {
+      throw new NotFoundException(`Transaction with payment intent ID ${paymentIntentId} not found`);
+    }
+    
+    return transaction;
   }
 
   async findByVendorId(vendorId: string) {

@@ -57,6 +57,71 @@ export class TicketService {
     };
   }
 
+  async updateTicketsForRefundedTransaction(transactionId: string): Promise<void> {
+    try {
+      const tickets = await this.ticketModel.find({ transactionId });
+      
+      if (!tickets.length) {
+        console.log(`No tickets found for refunded transaction: ${transactionId}`);
+        return;
+      }
+      
+      const session = await this.ticketModel.db.startSession();
+      
+      try {
+        await session.withTransaction(async () => {
+          // Update all tickets to CANCELLED status
+          const updatePromises = tickets.map(ticket =>
+            this.ticketModel.findByIdAndUpdate(
+              ticket._id,
+              {
+                status: TicketStatus.CANCELLED,
+                statusUpdateReason: 'Transaction refunded',
+                statusUpdatedAt: new Date(),
+                statusUpdatedBy: 'system',
+              },
+              { new: true, session }
+            )
+          );
+          
+          await Promise.all(updatePromises);
+          
+          // Process vendor balance adjustments
+          for (const ticket of tickets) {
+            if (ticket.vendorId) {
+              try {
+                // If ticket was REDEEMED, subtract the vendor's portion which is stored in vendorOwed
+                // For unredeemed tickets, we don't need to adjust the balance as they weren't paid yet
+                if (ticket.status === TicketStatus.REDEEMED) {
+                  // Adjust vendor's balance, allowing it to go negative if necessary
+                  await this.vendorModel.findByIdAndUpdate(
+                    ticket.vendorId,
+                    { $inc: { internalAccountBalance: -ticket.vendorOwed } },
+                    { session }
+                  );
+                  
+                  console.log(`Adjusted vendor ${ticket.vendorId} balance by -${ticket.vendorOwed} for redeemed ticket ${ticket._id}`);
+                }
+              } catch (err) {
+                // Log the error but continue processing other tickets
+                console.error(`Failed to update vendor balance for refund: ${err.message}`);
+              }
+            }
+          }
+        });
+        
+        console.log(`Successfully updated ${tickets.length} tickets for refunded transaction: ${transactionId}`);
+      } catch (error) {
+        console.error('Transaction error during refund processing:', error);
+        throw new InternalServerErrorException('Failed to process refund transaction');
+      } finally {
+        await session.endSession();
+      }
+    } catch (error) {
+      console.error('Error updating tickets for refunded transaction:', error);
+      throw new InternalServerErrorException('Failed to update tickets after refund');
+    }
+  }
   
   async createTicket(ticketData: Partial<TicketSchemaClass>): Promise<any> {
     const session = await this.ticketModel.db.startSession();

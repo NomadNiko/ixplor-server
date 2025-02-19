@@ -8,11 +8,12 @@ import {
   Get,
   Query,
   Request,
-  RawBodyRequest
+  RawBodyRequest,
+  Param
 } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { CartItemClass } from '../cart/entities/cart.schema';
 import Stripe from 'stripe';
 import { Request as ExpressRequest } from 'express';
@@ -62,4 +63,39 @@ export class StripeController {
       throw error;
     }
   }
+
+  @Post('refund/ticket/:id')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Issue a refund for a specific ticket' })
+  @ApiResponse({ status: 200, description: 'Refund initiated successfully' })
+  @ApiResponse({ status: 404, description: 'Ticket or transaction not found' })
+  async refundTicket(
+    @Param('id') ticketId: string
+  ) {
+    const refund = await this.stripeService.issueTicketRefund(ticketId);
+    return {
+      success: true,
+      message: 'Ticket refund initiated successfully',
+      refundId: refund.id
+    };
+  }
+  
+  @Post('refund/transaction/:id')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Issue a full refund for a transaction' })
+  @ApiResponse({ status: 200, description: 'Refund initiated successfully' })
+  @ApiResponse({ status: 404, description: 'Transaction not found' })
+  async refundTransaction(
+    @Param('id') transactionId: string
+  ) {
+    const refund = await this.stripeService.issueTransactionRefund(transactionId);
+    return {
+      success: true,
+      message: 'Transaction refund initiated successfully',
+      refundId: refund.id
+    };
+  }
+
 }

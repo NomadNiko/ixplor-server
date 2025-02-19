@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -149,54 +149,75 @@ export class StripeService {
     }
   }
 
-  async handleWebhookEvent(signature: string, payload: any) {
-    try {
-      const event = typeof payload === 'string' ? JSON.parse(payload) : payload;
-      console.log('Processing webhook event type:', event.type);
-
-      switch (event.type) {
-        case 'checkout.session.completed':
-          await this.handleCheckoutSessionCompleted(
-            event.data.object as Stripe.Checkout.Session,
-          );
-          break;
-        case 'payment_intent.payment_failed':
-          await this.handlePaymentFailed(
-            event.data.object as Stripe.PaymentIntent,
-          );
-          break;
-        case 'checkout.session.expired':
-          await this.handleCheckoutSessionExpired(
-            event.data.object as Stripe.Checkout.Session,
-          );
-          break;
-        case 'transfer.created':
-          await this.handleTransferCreated(event.data.object);
-          break;
-        case 'charge.refunded':
-          await this.handleRefund(event.data.object as Stripe.Charge);
-          break;
-        case 'charge.dispute.created':
-          await this.handleDisputeCreated(event.data.object as Stripe.Dispute);
-          break;
-      }
-
-      return { received: true };
-    } catch (error) {
-      console.error('Error handling webhook:', error);
-      throw new InternalServerErrorException('Webhook handling failed');
+  
+async handleWebhookEvent(signature: string, payload: any) {
+  try {
+    const event = typeof payload === 'string' ? JSON.parse(payload) : payload;
+    console.log('Processing webhook event type:', event.type);
+    
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await this.handleCheckoutSessionCompleted(
+          event.data.object as Stripe.Checkout.Session,
+        );
+        break;
+        
+      case 'payment_intent.payment_failed':
+        await this.handlePaymentFailed(
+          event.data.object as Stripe.PaymentIntent,
+        );
+        break;
+        
+      case 'checkout.session.expired':
+        await this.handleCheckoutSessionExpired(
+          event.data.object as Stripe.Checkout.Session,
+        );
+        break;
+        
+      case 'charge.refunded':
+        // Extract payment_intent directly from the webhook data
+        const refundObject = event.data.object;
+        if (refundObject && refundObject.payment_intent) {
+          await this.handleRefund(refundObject.payment_intent, refundObject);
+          console.log(`Processing refund for payment intent: ${refundObject.payment_intent}`);
+        } else {
+          console.error('Missing payment_intent in charge.refunded webhook:', JSON.stringify(refundObject));
+        }
+        break;
+        
+      case 'charge.dispute.created':
+        await this.handleDisputeCreated(event.data.object as Stripe.Dispute);
+        break;
     }
+    
+    return { received: true };
+  } catch (error) {
+    console.error('Error handling webhook:', error);
+    throw new InternalServerErrorException('Webhook handling failed');
   }
+}
 
-  private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
-    try {
-      await this.transactionService.updateTransactionStatus(
-        session.id,
-        TransactionStatus.SUCCEEDED,
-        {
-          receiptEmail: session.customer_email || undefined,
-        },
-      );
+private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+  try {
+    // Extract payment_intent directly from the session object
+    const paymentIntentId = session.payment_intent as string;
+    if (!paymentIntentId) {
+      console.error('Missing payment intent ID in checkout session:', JSON.stringify(session));
+      throw new Error('Missing payment intent ID in checkout session');
+    }
+
+    console.log(`Storing payment intent ID ${paymentIntentId} for checkout session ${session.id}`);
+    
+    // Store the payment intent ID during checkout completion
+    await this.transactionService.updateTransactionStatus(
+      session.id,
+      TransactionStatus.SUCCEEDED,
+      {
+        receiptEmail: session.customer_email || undefined,
+        paymentIntentId: paymentIntentId,
+      },
+    );
+
   
       if (!session.metadata?.customerId || !session.metadata?.items) {
         throw new Error('Missing required metadata in checkout session');
@@ -251,6 +272,7 @@ export class StripeService {
       throw error;
     }
   }
+  
 
   private async handleCheckoutSessionExpired(session: Stripe.Checkout.Session) {
     try {
@@ -279,18 +301,144 @@ export class StripeService {
     );
   }
 
-  private async handleRefund(charge: Stripe.Charge) {
-    if (charge.refunds?.data?.[0]) {
-      const refund = charge.refunds.data[0];
-      await this.transactionService.updateTransactionStatus(
-        charge.payment_intent as string,
+  private async handleRefund(paymentIntentId: string, refundData: any) {
+    try {
+      console.log(`Processing refund for payment intent: ${paymentIntentId}`);
+      
+      // Find transaction by payment intent ID
+      const transaction = await this.transactionService.findByPaymentIntentId(paymentIntentId);
+      
+      if (!transaction) {
+        console.error(`Transaction not found for payment intent ID: ${paymentIntentId}`);
+        return;
+      }
+      
+      // Extract refund details from the refund data
+      const refundAmount = refundData.amount_refunded || 0;
+      let refundId, refundReason;
+      
+      if (refundData.refunds && refundData.refunds.data && refundData.refunds.data.length > 0) {
+        refundId = refundData.refunds.data[0].id;
+        refundReason = refundData.refunds.data[0].reason;
+      }
+      
+      // Update transaction status
+      await this.transactionService.updateTransactionStatusByPaymentIntentId(
+        paymentIntentId,
         TransactionStatus.REFUNDED,
         {
-          refundId: refund.id,
-          refundAmount: refund.amount,
-          refundReason: refund.reason || undefined,
+          refundId,
+          refundAmount,
+          refundReason,
         },
       );
+      
+      // Update tickets if transaction has checkout session ID
+      if (transaction.stripeCheckoutSessionId) {
+        await this.ticketService.updateTicketsForRefundedTransaction(
+          transaction.stripeCheckoutSessionId
+        );
+        console.log(`Updated tickets for checkout session: ${transaction.stripeCheckoutSessionId}`);
+      } else {
+        console.error(
+          `No checkout session ID found for transaction with payment intent ${paymentIntentId}`
+        );
+      }
+      
+      console.log(`Successfully processed refund for payment intent ${paymentIntentId}`);
+    } catch (error) {
+      console.error(`Error processing refund for payment intent ${paymentIntentId}:`, error);
+    }
+  }
+
+  async issueTicketRefund(ticketId: string): Promise<any> {
+    try {
+      // Get the ticket
+      const ticket = await this.ticketService.findById(ticketId);
+      if (!ticket) {
+        throw new NotFoundException(`Ticket with ID ${ticketId} not found`);
+      }
+  
+      // Get the transaction using transactionId from the ticket
+      let transaction;
+      try {
+        // Try to get it directly first
+        transaction = await this.transactionService.findByCheckoutSessionId(ticket.transactionId);
+      } catch (error) {
+        // If not found directly, try with findById which returns {data: transaction}
+        const transactionResponse = await this.transactionService.findById(ticket.transactionId);
+        transaction = transactionResponse.data;
+      }
+  
+      if (!transaction) {
+        throw new NotFoundException(`Transaction for ticket ${ticketId} not found`);
+      }
+  
+      // Ensure we have a payment intent ID
+      if (!transaction.paymentIntentId) {
+        throw new BadRequestException(
+          `No payment intent ID found for transaction ${ticket.transactionId}`
+        );
+      }
+  
+      // Calculate the amount to refund (ticket price in cents)
+      const refundAmount = Math.round(ticket.productPrice * 100);
+  
+      // Issue the refund through Stripe
+      const refund = await this.stripe.refunds.create({
+        payment_intent: transaction.paymentIntentId,
+        amount: refundAmount,
+        metadata: {
+          ticketId: ticketId,
+          transactionId: transaction._id.toString()
+        }
+      });
+  
+      console.log(`Refund initiated for ticket ${ticketId}, amount: ${refundAmount / 100}`);
+      return refund;
+    } catch (error) {
+      console.error(`Error issuing refund for ticket ${ticketId}:`, error);
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to process ticket refund');
+    }
+  }
+
+
+  async issueTransactionRefund(transactionId: string): Promise<any> {
+    try {
+      // Get the transaction
+      const transactionResponse = await this.transactionService.findById(transactionId);
+      const transaction = transactionResponse.data;
+      
+      if (!transaction) {
+        throw new NotFoundException(`Transaction with ID ${transactionId} not found`);
+      }
+  
+      // Ensure we have a payment intent ID
+      if (!transaction.paymentIntentId) {
+        throw new BadRequestException(
+          `No payment intent ID found for transaction ${transactionId}`
+        );
+      }
+  
+      // Issue a full refund through Stripe
+      const refund = await this.stripe.refunds.create({
+        payment_intent: transaction.paymentIntentId,
+        metadata: {
+          transactionId: transactionId
+        }
+      });
+  
+      console.log(`Full refund initiated for transaction ${transactionId}`);
+      return refund;
+    } catch (error) {
+      console.error(`Error issuing refund for transaction ${transactionId}:`, error);
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to process transaction refund');
     }
   }
 

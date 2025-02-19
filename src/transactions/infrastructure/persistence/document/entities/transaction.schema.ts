@@ -70,20 +70,23 @@ export class TransactionSchemaClass {
     },
   })
   stripeCheckoutSessionId?: string;
-
+  
+  @Prop()
+  paymentIntentId?: string;
+  
   @Prop({ required: true })
   amount: number;
-
+  
   @Prop({ required: true })
   currency: string;
-
+  
   @Prop({
     required: function (this: TransactionSchemaClass) {
       return this.type === TransactionType.PAYMENT;
     },
   })
   customerId?: string;
-
+  
   @Prop({
     required: function (this: TransactionSchemaClass) {
       return this.type === TransactionType.PAYMENT;
@@ -91,51 +94,51 @@ export class TransactionSchemaClass {
     type: [String]
   })
   productItemIds?: string[];
-
+  
   @Prop({
     type: String,
     enum: TransactionStatus,
     default: TransactionStatus.PENDING,
   })
   status: TransactionStatus;
-
+  
   @Prop({
     type: String,
     enum: TransactionType,
     required: true,
   })
   type: TransactionType;
-
+  
   @Prop({ type: Object })
   paymentMethodDetails?: StripePaymentMethodDetails;
-
+  
   @Prop()
   description?: string;
-
+  
   @Prop()
   receiptEmail?: string;
-
+  
   @Prop({ type: Object })
   metadata?: Record<string, any>;
-
+  
   @Prop()
   refundId?: string;
-
+  
   @Prop()
   refundAmount?: number;
-
+  
   @Prop()
   refundReason?: string;
-
+  
   @Prop()
   disputeId?: string;
-
+  
   @Prop()
   disputeStatus?: string;
-
+  
   @Prop()
   disputeAmount?: number;
-
+  
   @Prop()
   error?: string;
 }
@@ -143,6 +146,7 @@ export class TransactionSchemaClass {
 export const TransactionSchema = SchemaFactory.createForClass(TransactionSchemaClass);
 
 TransactionSchema.index({ stripeCheckoutSessionId: 1 }, { unique: true, partialFilterExpression: { type: TransactionType.PAYMENT } });
+TransactionSchema.index({ paymentIntentId: 1 }, { sparse: true });
 TransactionSchema.index({ vendorId: 1 });
 TransactionSchema.index({ customerId: 1 });
 TransactionSchema.index({ "productItemIds": 1 });
