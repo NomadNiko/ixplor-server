@@ -14,6 +14,8 @@ import { TicketService } from '../tickets/ticket.service';
 import { StripeCheckoutService } from './services/stripe-checkout.service';
 import { StripeWebhookService } from './services/stripe-webhook.service';
 import { StripeRefundService } from './services/stripe-refund.service';
+import { UsersService } from 'src/users/users.service';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class StripeService {
@@ -31,6 +33,8 @@ export class StripeService {
     private cartService: CartService,
     private productItemService: ProductItemService,
     private ticketService: TicketService,
+    private userService: UsersService,
+    private mailService: MailService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY', { infer: true }) ?? '',
@@ -53,7 +57,9 @@ export class StripeService {
       vendorService,
       cartService,
       productItemService,
-      ticketService
+      ticketService,
+      userService,
+      mailService
     );
 
     this.stripeRefundService = new StripeRefundService(
