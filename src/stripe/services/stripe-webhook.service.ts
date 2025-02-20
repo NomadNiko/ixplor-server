@@ -287,6 +287,8 @@ export class StripeWebhookService {
   }
 
   private async handleChargeSucceeded(charge: Stripe.Charge) {
+    // Wait 10 seconds to give Stripe time to finish checkout and send the next Webhook
+    await new Promise(resolve => setTimeout(resolve, 10000));
     try {
       if (!charge.payment_intent) {
         console.warn(
