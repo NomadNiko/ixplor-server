@@ -155,7 +155,7 @@ export class MailService {
     stripeReceiptUrl?: string;
   }>): Promise<void> {
     const i18n = I18nContext.current();
-    const receiptTitle = await i18n?.translate('common.transactionReceipt') || 'Your Purchase Receipt';
+    const receiptTitle = await i18n?.translate('common.transactionReceiptHeader') || 'Your Purchase Receipt';
     const text1 = await i18n?.translate('transaction-receipt.text1') || 'Thank you for your purchase!';
     const text2 = await i18n?.translate('transaction-receipt.text2') || 'Here are the details of your order:';
     const text3 = await i18n?.translate('transaction-receipt.text3') || 'You can view your tickets in your account dashboard.';
