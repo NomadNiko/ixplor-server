@@ -13,7 +13,8 @@ import { ProductItemAvailabilityService } from './services/product-item-availabi
 import { ProductItemQuantityService } from './services/product-item-quantity.service';
 import { ProductItemManagementService } from './services/product-item-management.service';
 import { ProductItemTransformService } from './services/product-item-transform.service';
-
+import { ProductItemCleanupService } from './services/product-item-cleanup.service';
+import { ScheduleModule } from '@nestjs/schedule';
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -22,12 +23,14 @@ import { ProductItemTransformService } from './services/product-item-transform.s
         schema: ProductItemSchema,
       },
     ]),
+    ScheduleModule.forRoot(),
     VendorModule,
     ProductTemplateModule,
   ],
   controllers: [ProductItemController],
   providers: [
     ProductItemService,
+    ProductItemCleanupService,
     ProductItemQueryService,
     ProductItemAvailabilityService,
     ProductItemQuantityService,
