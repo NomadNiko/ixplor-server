@@ -2,6 +2,9 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { StripeController } from './stripe.controller';
 import { StripeService } from './stripe.service';
+import { StripeCheckoutService } from './services/stripe-checkout.service';
+import { StripeWebhookService } from './services/stripe-webhook.service';
+import { StripeRefundService } from './services/stripe-refund.service';
 import { TransactionModule } from '../transactions/transaction.module';
 import { VendorModule } from '../vendors/vendor.module';
 import { CartModule } from '../cart/cart.module';
@@ -20,11 +23,16 @@ import { PayoutSchemaClass, PayoutSchema } from '../payout/infrastructure/persis
     TransactionModule,
     VendorModule,
     CartModule,
-    ProductItemModule, // Add ProductItemModule to make ProductItemService available
+    ProductItemModule,
     TicketModule
   ],
   controllers: [StripeController],
-  providers: [StripeService],
+  providers: [
+    StripeService,
+    StripeCheckoutService,
+    StripeWebhookService,
+    StripeRefundService
+  ],
   exports: [StripeService],
 })
 export class StripeModule {}
