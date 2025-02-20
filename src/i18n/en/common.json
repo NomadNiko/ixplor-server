@@ -1,4 +1,12 @@
 {
   "confirmEmail": "Confirm email",
-  "resetPassword": "Reset password"
+  "resetPassword": "Reset password",
+  "common": {
+    "transactionReceipt": "Your Purchase Receipt"
+  },
+  "transaction-receipt": {
+    "text1": "Thank you for your purchase!",
+    "text2": "Here are the details of your order:",
+    "text3": "You can view your tickets in your account dashboard."
+  }
 }
