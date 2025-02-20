@@ -190,6 +190,7 @@ export class MailService {
         text1,
         text2,
         text3,
+        currentYear: new Date().getFullYear() // Add this to fix the template error
       },
     });
   }
