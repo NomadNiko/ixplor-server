@@ -8,7 +8,7 @@ import { VendorService } from '../../vendors/vendor.service';
 import { CartService } from '../../cart/cart.service';
 import { ProductItemService } from '../../product-item/product-item.service';
 import { TicketService } from '../../tickets/ticket.service';
-import { TransactionStatus } from '../../transactions/infrastructure/persistence/document/entities/transaction.schema';
+import { CheckoutData, TransactionStatus } from '../../transactions/infrastructure/persistence/document/entities/transaction.schema';
 import { PayoutSchemaClass, PayoutStatus } from '../../payout/infrastructure/persistence/document/entities/payout.schema';
 import { TicketStatus } from '../../tickets/infrastructure/persistence/document/entities/ticket.schema';
 
@@ -57,6 +57,12 @@ export class StripeWebhookService {
             event.data.object as Stripe.Checkout.Session,
           );
           break;
+
+          case 'charge.succeeded':
+        await this.handleChargeSucceeded(
+          event.data.object as Stripe.Charge,
+        );
+        break;
           
         case 'charge.refunded':
           // Extract payment_intent directly from the webhook data
@@ -239,5 +245,64 @@ export class StripeWebhookService {
         disputeAmount: dispute.amount,
       },
     );
+  }
+
+  private async handleChargeSucceeded(charge: Stripe.Charge) {
+    try {
+      if (!charge.payment_intent) {
+        console.warn('Charge succeeded webhook received without payment_intent ID');
+        return;
+      }
+  
+      const paymentIntentId = typeof charge.payment_intent === 'string' 
+        ? charge.payment_intent 
+        : charge.payment_intent.id;
+      
+      console.log(`Processing charge.succeeded for payment intent: ${paymentIntentId}`);
+      
+      const transaction = await this.transactionService.findByPaymentIntentId(paymentIntentId);
+      
+      if (!transaction) {
+        console.warn(`No transaction found for payment intent: ${paymentIntentId}`);
+        return;
+      }
+      
+      // Extract checkout data from charge with proper null handling
+      const checkoutData: CheckoutData = {
+        chargeId: charge.id,
+        amount: charge.amount,
+        amount_captured: charge.amount_captured,
+        amount_refunded: charge.amount_refunded,
+        billing_details: {
+          address: charge.billing_details?.address || null,
+          email: charge.billing_details?.email,
+          name: charge.billing_details?.name,
+          phone: charge.billing_details?.phone
+        },
+        captured: charge.captured,
+        created: charge.created,
+        currency: charge.currency,
+        paid: charge.paid,
+        payment_intent: paymentIntentId,
+        payment_method: typeof charge.payment_method === 'string' ? charge.payment_method : 'unknown',
+        receipt_email: charge.receipt_email,
+        receipt_url: charge.receipt_url
+      };
+      
+      // Update transaction with checkout data
+      await this.transactionService.updateTransactionStatusByPaymentIntentId(
+        paymentIntentId,
+        TransactionStatus.SUCCEEDED,
+        {
+          checkoutData,
+          receiptEmail: charge.receipt_email || undefined,
+        },
+      );
+      
+      console.log(`Successfully updated transaction with checkout data for payment intent: ${paymentIntentId}`);
+    } catch (error) {
+      console.error('Error handling charge.succeeded webhook:', error);
+      throw error;
+    }
   }
 }

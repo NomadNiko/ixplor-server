@@ -43,6 +43,34 @@ export interface StripePaymentMethodDetails {
   };
 }
 
+export interface CheckoutData {
+  chargeId: string;
+  amount: number;
+  amount_captured: number;
+  amount_refunded: number;
+  billing_details: {
+    address?: {
+      city?: string | null;
+      country?: string | null;
+      line1?: string | null;
+      line2?: string | null;
+      postal_code?: string | null;
+      state?: string | null;
+    } | null;
+    email?: string | null;
+    name?: string | null;
+    phone?: string | null;
+  };
+  captured: boolean;
+  created: number;
+  currency: string;
+  paid: boolean;
+  payment_intent: string;
+  payment_method: string;
+  receipt_email?: string | null;
+  receipt_url?: string | null;
+}
+
 @Schema({
   timestamps: true,
   toJSON: {
@@ -150,6 +178,9 @@ partialRefunds?: Array<{
   reason?: string;
   refundedAt: Date;
 }>;
+
+@Prop({ type: Object })
+checkoutData?: CheckoutData;
 }
 
 export const TransactionSchema = SchemaFactory.createForClass(

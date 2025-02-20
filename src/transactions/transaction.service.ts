@@ -125,15 +125,16 @@ export class TransactionService {
   }
 
   async findByPaymentIntentId(paymentIntentId: string) {
-    const transaction = await this.transactionModel.findOne({ 
-      paymentIntentId: paymentIntentId 
-    });
-    
-    if (!transaction) {
-      return null;
+    try {
+      const transaction = await this.transactionModel.findOne({ 
+        paymentIntentId: paymentIntentId 
+      });
+      
+      return transaction;
+    } catch (error) {
+      console.error(`Error finding transaction by payment intent ID ${paymentIntentId}:`, error);
+      throw new InternalServerErrorException('Failed to find transaction by payment intent ID');
     }
-    
-    return transaction;
   }
   
   async updateTransactionStatusByPaymentIntentId(
@@ -141,23 +142,32 @@ export class TransactionService {
     status: TransactionStatus,
     additionalData: Partial<TransactionSchemaClass> = {}
   ) {
-    const transaction = await this.transactionModel.findOneAndUpdate(
-      { paymentIntentId: paymentIntentId },
-      { 
-        $set: {
-          status,
-          ...additionalData,
-          updatedAt: new Date()
-        }
-      },
-      { new: true }
-    );
-    
-    if (!transaction) {
-      throw new NotFoundException(`Transaction with payment intent ID ${paymentIntentId} not found`);
+    try {
+      const transaction = await this.transactionModel.findOneAndUpdate(
+        { paymentIntentId: paymentIntentId },
+        { 
+          $set: {
+            status,
+            ...additionalData,
+            updatedAt: new Date()
+          }
+        },
+        { new: true }
+      );
+      
+      if (!transaction) {
+        throw new NotFoundException(`Transaction with payment intent ID ${paymentIntentId} not found`);
+      }
+      
+      console.log(`Updated transaction ${transaction._id} with new status ${status} and additional data`);
+      return transaction;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error(`Error updating transaction by payment intent ID ${paymentIntentId}:`, error);
+      throw new InternalServerErrorException('Failed to update transaction status by payment intent ID');
     }
-    
-    return transaction;
   }
 
   async addPartialRefund({
