@@ -538,7 +538,7 @@ export class StripeService {
   private async reclaimVendorFunds(vendorId: string, amount: number): Promise<void> {
     try {
       // Update vendor balance using the vendor service
-      await this.vendorService.updateVendorBalance(vendorId, -amount);
+      await this.vendorService.updateVendorBalance(vendorId, -amount/100);
       
       console.log(`Reclaimed ${amount} from vendor ${vendorId}`);
     } catch (error) {
