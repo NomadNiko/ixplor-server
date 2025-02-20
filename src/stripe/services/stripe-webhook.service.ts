@@ -11,6 +11,8 @@ import { TicketService } from '../../tickets/ticket.service';
 import { CheckoutData, TransactionStatus } from '../../transactions/infrastructure/persistence/document/entities/transaction.schema';
 import { PayoutSchemaClass, PayoutStatus } from '../../payout/infrastructure/persistence/document/entities/payout.schema';
 import { TicketStatus } from '../../tickets/infrastructure/persistence/document/entities/ticket.schema';
+import { UsersService } from 'src/users/users.service';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class StripeWebhookService {
@@ -25,6 +27,8 @@ export class StripeWebhookService {
     private cartService: CartService,
     private productItemService: ProductItemService,
     private ticketService: TicketService,
+    private userService: UsersService,
+    private mailService: MailService,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY', { infer: true }) ?? '',
@@ -300,6 +304,53 @@ export class StripeWebhookService {
       );
       
       console.log(`Successfully updated transaction with checkout data for payment intent: ${paymentIntentId}`);
+      
+      // Send receipt email to customer
+      try {
+        // Get the user's information from our system
+        if (transaction.customerId) {
+          const user = await this.userService.findById(transaction.customerId);
+          if (!user) {
+            console.warn(`User not found for customer ID: ${transaction.customerId}`);
+            return;
+          }
+          
+          // Get the tickets/items associated with this transaction
+          const tickets = await this.ticketService.findByTransactionId(transaction.stripeCheckoutSessionId as string);
+          
+          if (!tickets || tickets.length === 0) {
+            console.warn(`No tickets found for transaction: ${transaction.stripeCheckoutSessionId}`);
+            return;
+          }
+          
+          // Prepare product items for email
+          const productItems = tickets.map(ticket => ({
+            productName: ticket.productName,
+            quantity: ticket.quantity,
+            price: ticket.productPrice,
+            date: ticket.productDate ? new Date(ticket.productDate).toLocaleDateString() : undefined,
+            time: ticket.productStartTime
+          }));
+          
+          // Send receipt email using our mail service
+          await this.mailService.sendTransactionReceipt({
+            to: user.email as string,
+            data: {
+              userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Valued Customer',
+              transactionId: transaction._id.toString(),
+              amount: transaction.amount,
+              purchaseDate: new Date().toLocaleDateString(),
+              productItems,
+              stripeReceiptUrl: checkoutData.receipt_url as string
+            }
+          });
+          
+          console.log(`Receipt email sent to ${user.email} for transaction ${transaction._id}`);
+        }
+      } catch (emailError) {
+        // Log error but don't fail the overall process
+        console.error('Error sending receipt email:', emailError);
+      }
     } catch (error) {
       console.error('Error handling charge.succeeded webhook:', error);
       throw error;

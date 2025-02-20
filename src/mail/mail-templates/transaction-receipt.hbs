@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}}</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      color: #333333;
+      line-height: 1.6;
+      margin: 0;
+      padding: 0;
+      background-color: #f7f7f7;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #eeeeee;
+      margin-bottom: 20px;
+    }
+    .logo {
+      max-width: 150px;
+      margin-bottom: 15px;
+    }
+    h1 {
+      color: #0066cc;
+      font-size: 24px;
+      margin: 0;
+      padding: 0;
+    }
+    h2 {
+      font-size: 18px;
+      margin-top: 25px;
+      margin-bottom: 10px;
+      color: #444444;
+    }
+    p {
+      margin: 15px 0;
+      font-size: 16px;
+    }
+    .receipt-details {
+      background-color: #f9f9f9;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+    }
+    .receipt-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      border-bottom: 1px solid #eeeeee;
+    }
+    .receipt-row:last-child {
+      border-bottom: none;
+    }
+    .receipt-label {
+      font-weight: bold;
+      color: #555555;
+    }
+    .product-list {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    .product-list th {
+      background-color: #f2f2f2;
+      text-align: left;
+      padding: 10px;
+      font-weight: 600;
+      border-bottom: 2px solid #dddddd;
+    }
+    .product-list td {
+      padding: 10px;
+      border-bottom: 1px solid #eeeeee;
+    }
+    .total-row td {
+      font-weight: bold;
+      border-top: 2px solid #dddddd;
+    }
+    .footer {
+      text-align: center;
+      padding-top: 20px;
+      border-top: 1px solid #eeeeee;
+      margin-top: 30px;
+      color: #777777;
+      font-size: 14px;
+    }
+    .button {
+      display: inline-block;
+      background-color: #0066cc;
+      color: #ffffff;
+      text-decoration: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      margin: 20px 0;
+      font-weight: 500;
+    }
+    .stripe-receipt {
+      display: block;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .stripe-button {
+      display: inline-block;
+      background-color: #635bff;
+      color: #ffffff;
+      text-decoration: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>{{title}}</h1>
+    </div>
+
+    <p>Hello {{userName}},</p>
+    <p>{{text1}}</p>
+    <p>{{text2}}</p>
+
+    <div class="receipt-details">
+      <div class="receipt-row">
+        <span class="receipt-label">Order Number:</span>
+        <span>#{{formattedTransactionId}}</span>
+      </div>
+      <div class="receipt-row">
+        <span class="receipt-label">Purchase Date:</span>
+        <span>{{purchaseDate}}</span>
+      </div>
+      <div class="receipt-row">
+        <span class="receipt-label">Total Amount:</span>
+        <span>${{amount}}</span>
+      </div>
+    </div>
+
+    <h2>Items Purchased</h2>
+    <table class="product-list">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Price</th>
+          <th>Qty</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each productItems}}
+        <tr>
+          <td>{{this.productName}}</td>
+          <td>{{this.date}}</td>
+          <td>{{this.time}}</td>
+          <td>${{this.formattedPrice}}</td>
+          <td>{{this.quantity}}</td>
+          <td>${{this.formattedTotal}}</td>
+        </tr>
+        {{/each}}
+        <tr class="total-row">
+          <td colspan="5" align="right">Total:</td>
+          <td>${{amount}}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    {{#if stripeReceiptUrl}}
+    <div class="stripe-receipt">
+      <p>You can also view your official payment receipt from Stripe:</p>
+      <a href="{{stripeReceiptUrl}}" target="_blank" class="stripe-button">View Stripe Receipt</a>
+    </div>
+    {{/if}}
+
+    <p>{{text3}}</p>
+    <p>Thank you for choosing {{appName}}. We look forward to serving you again soon!</p>
+
+    <div class="footer">
+      <p>&copy; {{currentYear}} {{appName}}. All rights reserved.</p>
+      <p>If you have any questions about your order, please contact our support team.</p>
+    </div>
+  </div>
+</body>
+</html>

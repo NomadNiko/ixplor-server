@@ -10,6 +10,8 @@ import { VendorModule } from '../vendors/vendor.module';
 import { CartModule } from '../cart/cart.module';
 import { ProductItemModule } from '../product-item/product-item.module';
 import { TicketModule } from '../tickets/ticket.module';
+import { UsersModule } from '../users/users.module';
+import { MailModule } from '../mail/mail.module';
 import { PayoutSchemaClass, PayoutSchema } from '../payout/infrastructure/persistence/document/entities/payout.schema';
 
 @Module({
@@ -24,7 +26,9 @@ import { PayoutSchemaClass, PayoutSchema } from '../payout/infrastructure/persis
     VendorModule,
     CartModule,
     ProductItemModule,
-    TicketModule
+    TicketModule,
+    UsersModule,
+    MailModule
   ],
   controllers: [StripeController],
   providers: [

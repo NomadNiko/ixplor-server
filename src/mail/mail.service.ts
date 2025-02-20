@@ -139,4 +139,58 @@ export class MailService {
       },
     });
   }
+
+  async sendTransactionReceipt(mailData: MailData<{
+    userName: string;
+    transactionId: string;
+    amount: number;
+    purchaseDate: string;
+    productItems: Array<{
+      productName: string;
+      quantity: number;
+      price: number;
+      date?: string;
+      time?: string;
+    }>;
+    stripeReceiptUrl?: string;
+  }>): Promise<void> {
+    const i18n = I18nContext.current();
+    const receiptTitle = await i18n?.translate('common.transactionReceipt') || 'Your Purchase Receipt';
+    const text1 = await i18n?.translate('transaction-receipt.text1') || 'Thank you for your purchase!';
+    const text2 = await i18n?.translate('transaction-receipt.text2') || 'Here are the details of your order:';
+    const text3 = await i18n?.translate('transaction-receipt.text3') || 'You can view your tickets in your account dashboard.';
+  
+    await this.mailerService.sendMail({
+      to: mailData.to,
+      subject: `${receiptTitle} #${mailData.data.transactionId.slice(-6)}`,
+      text: `${receiptTitle} for Transaction #${mailData.data.transactionId.slice(-6)}`,
+      templatePath: path.join(
+        this.configService.getOrThrow('app.workingDirectory', {
+          infer: true,
+        }),
+        'src',
+        'mail',
+        'mail-templates',
+        'transaction-receipt.hbs',
+      ),
+      context: {
+        title: receiptTitle,
+        userName: mailData.data.userName,
+        transactionId: mailData.data.transactionId,
+        formattedTransactionId: mailData.data.transactionId.slice(-6),
+        amount: (mailData.data.amount / 100).toFixed(2),
+        purchaseDate: mailData.data.purchaseDate,
+        productItems: mailData.data.productItems.map(item => ({
+          ...item,
+          formattedPrice: (item.price).toFixed(2),
+          formattedTotal: (item.price * item.quantity).toFixed(2)
+        })),
+        appName: this.configService.get('app.name', { infer: true }),
+        stripeReceiptUrl: mailData.data.stripeReceiptUrl,
+        text1,
+        text2,
+        text3,
+      },
+    });
+  }
 }
