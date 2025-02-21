@@ -1,5 +1,6 @@
 {
   "confirmEmail": "Confirm email",
   "resetPassword": "Reset password",
-  "transactionReceipt": "Your Purchase Receipt"
+  "transactionReceipt": "Your Purchase Receipt",
+  "refundReceipt": "Refund Receipt"
 }

@@ -80,12 +80,12 @@ export class StripeWebhookService {
           break;
 
         case 'charge.refunded':
-          // Extract payment_intent directly from the webhook data
           const refundObject = event.data.object;
-          if (refundObject && refundObject.payment_intent) {
-            await this.handleRefund(refundObject.payment_intent, refundObject);
+          const chargeObject = event.data.object;
+          if (refundObject && chargeObject.payment_intent) {
+            await this.handleRefund(refundObject, chargeObject);
             console.log(
-              `Processing refund for payment intent: ${refundObject.payment_intent}`,
+              `Processing refund for payment intent: ${chargeObject.payment_intent}`,
             );
           } else {
             console.error(
@@ -257,20 +257,78 @@ export class StripeWebhookService {
     );
   }
 
-  private handleRefund(paymentIntentId: string, refundData: any) {
+  private async handleRefund(refundObject: any, chargeObject: any) {
+    await new Promise((resolve) => setTimeout(resolve, 10000));
     try {
-      // Just log the successful refund
-      console.log(
-        `Received successful refund confirmation for payment intent: ${paymentIntentId}`,
-      );
-      console.log(`Refund amount: ${refundData.amount_refunded / 100}`);
+      if (!chargeObject.payment_intent) {
+        console.warn('Refund webhook received without payment_intent ID');
+        return;
+      }
 
-      // No status changes or ticket cancellations - everything was handled proactively
-    } catch (error) {
-      console.error(
-        `Error logging refund for payment intent ${paymentIntentId}:`,
-        error,
+      const paymentIntentId =
+        typeof chargeObject.payment_intent === 'string'
+          ? chargeObject.payment_intent
+          : chargeObject.payment_intent.id;
+
+      const transaction = await this.transactionService.findByPaymentIntentId(
+        paymentIntentId,
       );
+      if (!transaction) {
+        console.warn(
+          `No transaction found for payment intent: ${paymentIntentId}`,
+        );
+        return;
+      }
+
+      const user = await this.userService.findById(
+        transaction.customerId as string,
+      );
+      if (!user) {
+        console.warn(
+          `User not found for customer ID: ${transaction.customerId}`,
+        );
+        return;
+      }
+
+      const tickets = await this.ticketService.findByTransactionId(
+        transaction.stripeCheckoutSessionId as string,
+      );
+      if (!tickets || tickets.length === 0) {
+        console.warn(
+          `No tickets found for transaction: ${transaction.stripeCheckoutSessionId}`,
+        );
+        return;
+      }
+
+      const productItems = tickets.map((ticket) => ({
+        productName: ticket.productName,
+        quantity: ticket.quantity,
+        price: ticket.productPrice,
+        date: ticket.productDate
+          ? new Date(ticket.productDate).toLocaleDateString()
+          : undefined,
+        time: ticket.productStartTime,
+      }));
+
+      await this.mailService.sendRefundReceipt({
+        to: user.email as string,
+        data: {
+          userName:
+            `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+            'Valued Customer',
+          transactionId: transaction._id.toString(),
+          amount: transaction.amount,
+          purchaseDate: new Date().toLocaleDateString(),
+          productItems,
+          stripeReceiptUrl: chargeObject.receipt_url,
+        },
+      });
+
+      console.log(
+        `Refund receipt email sent to ${user.email} for transaction ${transaction._id}`,
+      );
+    } catch (error) {
+      console.error('Error handling refund webhook:', error);
     }
   }
 
@@ -288,7 +346,7 @@ export class StripeWebhookService {
 
   private async handleChargeSucceeded(charge: Stripe.Charge) {
     // Wait 10 seconds to give Stripe time to finish checkout and send the next Webhook
-    await new Promise(resolve => setTimeout(resolve, 10000));
+    await new Promise((resolve) => setTimeout(resolve, 10000));
     try {
       if (!charge.payment_intent) {
         console.warn(
