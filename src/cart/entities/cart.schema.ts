@@ -91,6 +91,12 @@ export class CartSchemaClass {
 
   @Prop({ default: Date.now })
   updatedAt: Date;
+
+  @Prop({ type: Object })
+  bookingData?: {
+    startDateTime: Date;
+    duration: number;
+  };
 }
 
 export const CartSchema = SchemaFactory.createForClass(CartSchemaClass);

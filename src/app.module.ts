@@ -40,6 +40,10 @@ import { ProductItemModule } from './product-item/product-item.module';
 import { ProductTemplateModule } from './product-template/product-template.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { SupportTicketModule } from './support-ticket/support-ticket.module';
+import { BookingItemModule } from './booking-item/booking-item.module';
+import { StaffUserModule } from './staff-user/staff-user.module';
+import { BookingAssignmentModule } from './booking-assignment/booking-assignment.module';
+import { BookingAvailabilityModule } from './booking-availability/booking-availability.module';
 
 // <database-block>
 const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
@@ -118,6 +122,10 @@ const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
     TransactionModule,
     InvoiceModule,
     SupportTicketModule,
+    BookingItemModule,
+    StaffUserModule,
+    BookingAssignmentModule,
+    BookingAvailabilityModule,
   ],
 })
 export class AppModule {}
