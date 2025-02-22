@@ -90,13 +90,13 @@ export class StaffUserSchemaClass extends EntityDocumentHelper {
   })
   status: StaffUserStatusEnum;
 
-  @Prop({ type: String })
+  @Prop({ type: String, required: false })
   email?: string;
 
-  @Prop({ type: String })
+  @Prop({ type: String, required: false })
   phone?: string;
 
-  @Prop({ type: String })
+  @Prop({ type: String, required: false })
   notes?: string;
 
   @Prop({ default: now })

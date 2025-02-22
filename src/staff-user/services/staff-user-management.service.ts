@@ -30,11 +30,16 @@ export class StaffUserManagementService {
 
   async create(createStaffUserDto: CreateStaffUserDto) {
     try {
+      // Create with empty arrays and defaults
       const createdStaffUser = new this.staffUserModel({
-        ...createStaffUserDto,
-        status: StaffUserStatusEnum.ACTIVE,
-        shifts: createStaffUserDto.shifts || [],
-        bookedObjects: [],
+        name: createStaffUserDto.name,
+        vendorId: createStaffUserDto.vendorId,
+        email: createStaffUserDto.email,
+        phone: createStaffUserDto.phone,
+        status: createStaffUserDto.status || StaffUserStatusEnum.ACTIVE,
+        qualifiedProducts: [], // Initialize empty
+        shifts: [], // Initialize empty
+        bookedObjects: [], // Initialize empty
       });
 
       const staffUser = await createdStaffUser.save();
