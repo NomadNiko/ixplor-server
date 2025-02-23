@@ -6,12 +6,15 @@ import { UpdateStaffUserDto } from './dto/update-staff-user.dto';
 import { AddShiftDto } from './dto/add-shift.dto';
 import { AddQualificationDto } from './dto/add-qualification.dto';
 import { StaffUserStatusEnum } from './infrastructure/persistence/document/entities/staff-user.schema';
+import { StaffShiftBulkService } from './services/staff-shift-bulk.service';
+
 
 @Injectable()
 export class StaffUserService {
   constructor(
     private readonly queryService: StaffUserQueryService,
     private readonly managementService: StaffUserManagementService,
+    private readonly shiftBulkService: StaffShiftBulkService, // Add this line
   ) {}
 
   // Query Methods
@@ -36,4 +39,8 @@ export class StaffUserService {
   updateBookingStatus = this.managementService.updateBookingStatus.bind(this.managementService);
   findBestAvailableStaff = this.managementService.findBestAvailableStaff.bind(this.managementService);
   reassignBooking = this.managementService.reassignBooking.bind(this.managementService);
+
+  createBulkShifts = this.shiftBulkService.createBulkShifts.bind(this.shiftBulkService);
+  deleteBulkShifts = this.shiftBulkService.deleteBulkShifts.bind(this.shiftBulkService);
+  updateBulkShifts = this.shiftBulkService.updateBulkShifts.bind(this.shiftBulkService);
 }

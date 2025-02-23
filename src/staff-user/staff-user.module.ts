@@ -10,6 +10,7 @@ import { StaffUserQueryService } from './services/staff-user-query.service';
 import { StaffUserManagementService } from './services/staff-user-management.service';
 import { StaffUserTransformService } from './services/staff-user-transform.service';
 import { VendorModule } from '../vendors/vendor.module';
+import { StaffShiftBulkService } from './services/staff-shift-bulk.service';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { VendorModule } from '../vendors/vendor.module';
     StaffUserQueryService,
     StaffUserManagementService,
     StaffUserTransformService,
+    StaffShiftBulkService,
   ],
   exports: [StaffUserService],
 })

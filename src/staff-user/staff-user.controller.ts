@@ -216,4 +216,71 @@ export class StaffUserController {
       duration,
     );
   }
+
+  @Post(':id/shifts/bulk')
+@ApiOperation({ summary: 'Create multiple shifts for staff user' })
+@ApiResponse({ status: 201, description: 'Shifts created successfully' })
+async createBulkShifts(
+  @Param('id') id: string,
+  @Body() shifts: Array<{ startDateTime: Date; endDateTime: Date }>,
+  @Request() req
+) {
+  const staffUser = await this.staffUserService.findById(id);
+  const hasAccess = await this.vendorService.isUserAssociatedWithVendor(
+    req.user.id,
+    staffUser.data.vendorId,
+  );
+  if (!hasAccess && req.user.role?.id !== RoleEnum.admin) {
+    throw new UnauthorizedException(
+      'Not authorized to modify this staff user'
+    );
+  }
+  return this.staffUserService.createBulkShifts(id, shifts);
+}
+
+@Delete(':id/shifts/bulk')
+@ApiOperation({ summary: 'Delete multiple shifts from staff user' })
+@ApiResponse({ status: 200, description: 'Shifts deleted successfully' })
+async deleteBulkShifts(
+  @Param('id') id: string,
+  @Body() shiftIds: string[],
+  @Request() req
+) {
+  const staffUser = await this.staffUserService.findById(id);
+  const hasAccess = await this.vendorService.isUserAssociatedWithVendor(
+    req.user.id,
+    staffUser.data.vendorId,
+  );
+  if (!hasAccess && req.user.role?.id !== RoleEnum.admin) {
+    throw new UnauthorizedException(
+      'Not authorized to modify this staff user'
+    );
+  }
+  return this.staffUserService.deleteBulkShifts(id, shiftIds);
+}
+
+@Put(':id/shifts/bulk')
+@ApiOperation({ summary: 'Update multiple shifts for staff user' })
+@ApiResponse({ status: 200, description: 'Shifts updated successfully' })
+async updateBulkShifts(
+  @Param('id') id: string,
+  @Body() updates: Array<{ 
+    shiftId: string; 
+    startDateTime?: Date; 
+    endDateTime?: Date;
+  }>,
+  @Request() req
+) {
+  const staffUser = await this.staffUserService.findById(id);
+  const hasAccess = await this.vendorService.isUserAssociatedWithVendor(
+    req.user.id,
+    staffUser.data.vendorId,
+  );
+  if (!hasAccess && req.user.role?.id !== RoleEnum.admin) {
+    throw new UnauthorizedException(
+      'Not authorized to modify this staff user'
+    );
+  }
+  return this.staffUserService.updateBulkShifts(id, updates);
+}
 }
