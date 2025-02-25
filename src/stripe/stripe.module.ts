@@ -1,3 +1,4 @@
+// src/stripe/stripe.module.ts
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { StripeController } from './stripe.controller';
@@ -13,8 +14,8 @@ import { TicketModule } from '../tickets/ticket.module';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
 import { PayoutSchemaClass, PayoutSchema } from '../payout/infrastructure/persistence/document/entities/payout.schema';
-import { BookingItemModule } from 'src/booking-item/booking-item.module';
-import { VendorSchema, VendorSchemaClass } from 'src/vendors/infrastructure/persistence/document/entities/vendor.schema';
+import { BookingItemModule } from '../booking-item/booking-item.module';
+import { VendorSchema, VendorSchemaClass } from '../vendors/infrastructure/persistence/document/entities/vendor.schema';
 
 @Module({
   imports: [
@@ -23,7 +24,10 @@ import { VendorSchema, VendorSchemaClass } from 'src/vendors/infrastructure/pers
         name: PayoutSchemaClass.name, 
         schema: PayoutSchema 
       },
-      { name: VendorSchemaClass.name, schema: VendorSchema }
+      { 
+        name: VendorSchemaClass.name, 
+        schema: VendorSchema 
+      }
     ]),
     TransactionModule,
     VendorModule,
