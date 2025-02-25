@@ -1,7 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { BookedObject } from '../../staff-user/infrastructure/persistence/document/entities/staff-user.schema';
 
-class TimeSlotAvailability {
+export class TimeSlotAvailability {
   @ApiProperty({ example: '2025-03-01T09:00:00.000Z' })
   @Type(() => Date)
   startTime: Date;
@@ -38,4 +39,11 @@ export class AvailableStaffDto {
 
   @ApiPropertyOptional({ example: 80 })
   bookingSuccessRate?: number;
+
+  // Additional properties needed for cart integration
+  @ApiProperty({ example: '507f1f77bcf86cd799439011' })
+  _id: string;
+
+  @ApiPropertyOptional({ type: [BookedObject] })
+  bookedObjects?: BookedObject[];
 }

@@ -24,6 +24,7 @@ export class ShiftObject {
   endDateTime: Date;
 }
 
+
 @Schema({
   _id: false,
   timestamps: false
@@ -31,22 +32,25 @@ export class ShiftObject {
 export class BookedObject {
   @Prop({ type: Types.ObjectId, default: () => new Types.ObjectId() })
   _id?: Types.ObjectId;
-
+  
+  @Prop({ required: true })
+  bookingId: string;  // Add this property
+  
   @Prop({ required: true })
   bookingItemId: string;
-
+  
   @Prop({ required: true, type: Date })
   startDateTime: Date;
-
+  
   @Prop({ required: true, type: Number, min: 0 })
   duration: number;
-
+  
   @Prop({ type: String })
   transactionId?: string;
-
+  
   @Prop({ type: String })
   customerId?: string;
-
+  
   @Prop({ 
     type: String,
     enum: ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'],

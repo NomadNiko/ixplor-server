@@ -45,4 +45,11 @@ export class BookingDetailsDto {
 
   @ApiPropertyOptional({ example: 'Staff requested time change' })
   lastStatusChangeReason?: string;
+  
+  // Added properties needed for cart integration
+  @ApiPropertyOptional({ example: 149.99 })
+  price?: number;
+  
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439011' })
+  vendorId?: string;
 }

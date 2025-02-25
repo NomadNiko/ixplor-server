@@ -13,6 +13,7 @@ import { TicketModule } from '../tickets/ticket.module';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
 import { PayoutSchemaClass, PayoutSchema } from '../payout/infrastructure/persistence/document/entities/payout.schema';
+import { BookingItemModule } from 'src/booking-item/booking-item.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { PayoutSchemaClass, PayoutSchema } from '../payout/infrastructure/persis
     CartModule,
     ProductItemModule,
     TicketModule,
+    BookingItemModule,
     UsersModule,
     MailModule
   ],

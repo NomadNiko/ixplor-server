@@ -49,26 +49,25 @@ export class StripeCheckoutService {
       if (!Array.isArray(items) || items.length === 0) {
         throw new Error('Invalid or empty items array');
       }
-
       await this.cartService.setCheckoutStatus(customerId, true);
-
       const totalAmount = items.reduce((sum, item) => {
         const itemPrice = Number(item.price) || 0;
         const itemQuantity = Number(item.quantity) || 0;
         return sum + Math.round(itemPrice * itemQuantity * 100);
       }, 0);
-
       if (totalAmount <= 0) {
         throw new Error('Invalid total amount');
       }
       
+      // Enhance the metadata to include item type information
       const compactItemsMetadata = items.map(item => ({
         id: item.productItemId,
         q: item.quantity,
         d: new Date(item.productDate).toISOString().split('T')[0],
-        t: item.productStartTime
+        t: item.productStartTime,
+        type: item.itemType  // Include item type (product or booking)
       }));
-
+      
       const sessionParams: EmbeddedCheckoutParams = {
         ui_mode: 'embedded',
         return_url: returnUrl,
@@ -80,7 +79,8 @@ export class StripeCheckoutService {
               metadata: {
                 id: item.productItemId,
                 date: new Date(item.productDate).toISOString().split('T')[0],
-                time: item.productStartTime
+                time: item.productStartTime, 
+                type: item.itemType  // Include type in price metadata too
               }
             },
             unit_amount: Math.round(item.price * 100),

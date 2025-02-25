@@ -19,6 +19,7 @@ import {
 import { TicketStatus } from '../../tickets/infrastructure/persistence/document/entities/ticket.schema';
 import { UsersService } from '../../users/users.service';
 import { MailService } from '../../mail/mail.service';
+import { BookingItemService } from 'src/booking-item/booking-item.service';
 
 @Injectable()
 export class StripeWebhookService {
@@ -32,6 +33,7 @@ export class StripeWebhookService {
     private vendorService: VendorService,
     private cartService: CartService,
     private productItemService: ProductItemService,
+    private bookingItemService: BookingItemService,
     private ticketService: TicketService,
     private userService: UsersService,
     private mailService: MailService,
@@ -147,7 +149,6 @@ export class StripeWebhookService {
     session: Stripe.Checkout.Session,
   ) {
     try {
-      // Extract payment_intent directly from the session object
       const paymentIntentId = session.payment_intent as string;
       if (!paymentIntentId) {
         console.error(
@@ -156,12 +157,9 @@ export class StripeWebhookService {
         );
         throw new Error('Missing payment intent ID in checkout session');
       }
-
       console.log(
         `Storing payment intent ID ${paymentIntentId} for checkout session ${session.id}`,
       );
-
-      // Store the payment intent ID during checkout completion
       await this.transactionService.updateTransactionStatus(
         session.id,
         TransactionStatus.SUCCEEDED,
@@ -170,59 +168,95 @@ export class StripeWebhookService {
           paymentIntentId: paymentIntentId,
         },
       );
-
       if (!session.metadata?.customerId || !session.metadata?.items) {
         throw new Error('Missing required metadata in checkout session');
       }
-
       const customerId = session.metadata.customerId;
+      
+      // Parse the items from metadata
       const items = JSON.parse(session.metadata.items) as Array<{
         id: string;
         q: number;
         d: string;
         t: string;
+        type?: string; // Add type to identify booking vs product
       }>;
-
+      
       for (const item of items) {
-        const productItem = await this.productItemService.findById(item.id);
-        if (!productItem?.data) {
-          console.error(`Product item ${item.id} not found`);
-          continue;
-        }
-
         try {
-          for (let i = 0; i < item.q; i++) {
-            await this.ticketService.createTicket({
-              userId: customerId,
-              transactionId: session.id,
-              vendorId: productItem.data.vendorId,
-              productItemId: item.id,
-              productName: productItem.data.templateName,
-              productDescription: productItem.data.description,
-              productPrice: productItem.data.price,
-              productType: productItem.data.productType,
-              productDate: new Date(item.d),
-              productStartTime: item.t,
-              productDuration: productItem.data.duration,
-              productLocation: productItem.data.location,
-              productImageURL: productItem.data.imageURL,
-              productAdditionalInfo: productItem.data.additionalInfo,
-              productRequirements: productItem.data.requirements,
-              productWaiver: productItem.data.waiver,
-              quantity: 1,
-            });
+          // Check if this is a booking item or a product item
+          const isBookingItem = item.type === 'booking';
+          
+          if (isBookingItem) {
+            // Process as a booking item
+            const bookingItem = await this.bookingItemService.findById(item.id);
+            if (!bookingItem?.data) {
+              console.error(`Booking item ${item.id} not found`);
+              continue;
+            }
+            
+            for (let i = 0; i < item.q; i++) {
+              await this.ticketService.createTicket({
+                userId: customerId,
+                transactionId: session.id,
+                vendorId: bookingItem.data.vendorId,
+                productItemId: item.id,
+                productName: bookingItem.data.productName,
+                productDescription: bookingItem.data.description,
+                productPrice: bookingItem.data.price,
+                productType: 'booking', // Mark as booking type
+                productDate: new Date(item.d),
+                productStartTime: item.t,
+                productDuration: bookingItem.data.duration,
+                productLocation: bookingItem.data.location,
+                productImageURL: bookingItem.data.imageURL,
+                productAdditionalInfo: bookingItem.data.additionalInfo,
+                productRequirements: [], // Booking items might not have requirements like products
+                productWaiver: '', // Assign appropriate waiver if available
+                quantity: 1,
+              });
+            }
+          } else {
+            // Process as a product item (original behavior)
+            const productItem = await this.productItemService.findById(item.id);
+            if (!productItem?.data) {
+              console.error(`Product item ${item.id} not found`);
+              continue;
+            }
+            
+            for (let i = 0; i < item.q; i++) {
+              await this.ticketService.createTicket({
+                userId: customerId,
+                transactionId: session.id,
+                vendorId: productItem.data.vendorId,
+                productItemId: item.id,
+                productName: productItem.data.templateName,
+                productDescription: productItem.data.description,
+                productPrice: productItem.data.price,
+                productType: productItem.data.productType,
+                productDate: new Date(item.d),
+                productStartTime: item.t,
+                productDuration: productItem.data.duration,
+                productLocation: productItem.data.location,
+                productImageURL: productItem.data.imageURL,
+                productAdditionalInfo: productItem.data.additionalInfo,
+                productRequirements: productItem.data.requirements,
+                productWaiver: productItem.data.waiver,
+                quantity: 1,
+              });
+            }
           }
         } catch (error) {
           console.error(`Error processing item ${item.id}:`, error);
         }
       }
-
       await this.cartService.deleteCart(customerId);
     } catch (error) {
       console.error('Error processing successful checkout:', error);
       throw error;
     }
   }
+
 
   private async handleCheckoutSessionExpired(session: Stripe.Checkout.Session) {
     try {

@@ -7,6 +7,9 @@ import { CartCleanupService } from './cart-cleanup.service';
 import { CartSchemaClass, CartSchema } from './entities/cart.schema';
 import { ProductItemModule } from '../product-item/product-item.module';
 import { ProductTemplateModule } from '../product-template/product-template.module';
+import { BookingAssignmentModule } from '../booking-assignment/booking-assignment.module';
+import { BookingItemModule } from '../booking-item/booking-item.module';
+import { BookingAvailabilityModule } from '../booking-availability/booking-availability.module';
 
 @Module({
   imports: [
@@ -19,6 +22,9 @@ import { ProductTemplateModule } from '../product-template/product-template.modu
     ScheduleModule.forRoot(),
     ProductItemModule,
     ProductTemplateModule,
+    BookingAssignmentModule,
+    BookingItemModule,
+    BookingAvailabilityModule,
   ],
   controllers: [CartController],
   providers: [CartService, CartCleanupService],

@@ -2,6 +2,11 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 export type CartDocument = HydratedDocument<CartSchemaClass>;
 
+export enum CartItemType {
+  PRODUCT = 'product',
+  BOOKING = 'booking'
+}
+
 @Schema({
   timestamps: true,
   toJSON: {
@@ -21,6 +26,9 @@ export type CartDocument = HydratedDocument<CartSchemaClass>;
   },
 })
 export class CartItemClass {
+  @Prop({ required: true })
+  itemType: CartItemType;
+
   @Prop({ required: true })
   productItemId: string;
 
@@ -60,6 +68,16 @@ export class CartItemClass {
     min: 0
   })
   productDuration: number;
+
+  // Booking-specific fields
+  @Prop()
+  bookingId?: string;
+  
+  @Prop()
+  staffId?: string;
+  
+  @Prop()
+  bookingItemId?: string;
 }
 
 @Schema({

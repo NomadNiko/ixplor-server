@@ -97,6 +97,26 @@ export class StaffUserManagementService {
     }
   }
 
+  async removeBookingFromStaff(staffId: string, bookingId: string): Promise<void> {
+    const staff = await this.staffUserModel.findById(staffId);
+    
+    if (!staff) {
+      throw new NotFoundException(`Staff user with ID ${staffId} not found`);
+    }
+    
+    const initialLength = staff.bookedObjects.length;
+    staff.bookedObjects = staff.bookedObjects.filter(
+      booking => booking.bookingId !== bookingId
+    );
+    
+    if (staff.bookedObjects.length === initialLength) {
+      throw new NotFoundException(`Booking with ID ${bookingId} not found`);
+    }
+    
+    staff.updatedAt = new Date();
+    await staff.save();
+  }
+
   async updateStatus(id: string, status: StaffUserStatusEnum) {
     const staffUser = await this.staffUserModel.findById(id);
 

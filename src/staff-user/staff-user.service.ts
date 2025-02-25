@@ -40,6 +40,9 @@ export class StaffUserService {
   findBestAvailableStaff = this.managementService.findBestAvailableStaff.bind(this.managementService);
   reassignBooking = this.managementService.reassignBooking.bind(this.managementService);
 
+  removeBookingFromStaff = this.managementService.removeBookingFromStaff.bind(this.managementService);
+
+
   createBulkShifts = this.shiftBulkService.createBulkShifts.bind(this.shiftBulkService);
   deleteBulkShifts = this.shiftBulkService.deleteBulkShifts.bind(this.shiftBulkService);
   updateBulkShifts = this.shiftBulkService.updateBulkShifts.bind(this.shiftBulkService);

@@ -82,12 +82,12 @@ export class BookingAvailabilityService {
     if (!bookingItem) {
       throw new NotFoundException('Booking item not found');
     }
-
+  
     const qualifiedStaff = await this.staffUserService.findQualifiedForBookingItem(
       bookingItemId,
       bookingItem.data.vendorId
     );
-
+  
     const availableStaff: AvailableStaffDto[] = [];
     
     for (const staff of qualifiedStaff.data) {
@@ -96,7 +96,7 @@ export class BookingAvailabilityService {
         startDateTime,
         bookingItem.data.duration
       );
-
+  
       if (availability.isAvailable) {
         availableStaff.push({
           staffId: staff._id,
@@ -105,11 +105,12 @@ export class BookingAvailabilityService {
           isQualified: true,
           currentBookings: staff.bookedObjects.length,
           maxDailyBookings: this.calculateMaxDailyBookings(staff),
-          qualifications: staff.qualifiedProducts
+          qualifications: staff.qualifiedProducts,
+          _id: staff._id  // Add this line to fix the error
         });
       }
     }
-
+  
     return availableStaff;
   }
 
