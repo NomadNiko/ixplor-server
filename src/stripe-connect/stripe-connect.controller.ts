@@ -2,7 +2,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { StripeConnectService } from './stripe-connect.service';
 import { StripeAccountSessionDto } from './dto/stripe-connect.dto';
 import { Body, Controller, InternalServerErrorException, Param, Post, Request, UseGuards } from '@nestjs/common';
-import { VendorService } from 'src/vendors/vendor.service';
+import { VendorService } from '../vendors/vendor.service';
 
 @ApiTags('Stripe Connect')
 @Controller('stripe-connect')

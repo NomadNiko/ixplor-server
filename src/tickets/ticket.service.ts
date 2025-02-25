@@ -8,7 +8,7 @@ import {
 } from './infrastructure/persistence/document/entities/ticket.schema';
 import { VendorSchemaClass } from '../vendors/infrastructure/persistence/document/entities/vendor.schema';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
-import { ProductItemService } from 'src/product-item/product-item.service';
+import { ProductItemService } from '../product-item/product-item.service';
 
 @Injectable()
 export class TicketService {

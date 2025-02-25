@@ -26,7 +26,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../roles/roles.guard';
 import { Roles } from '../roles/roles.decorator';
 import { RoleEnum } from '../roles/roles.enum';
-import { StripeBalanceResponseDto } from 'src/stripe-connect/dto/stripe-balance.dto';
+import { StripeBalanceResponseDto } from '../stripe-connect/dto/stripe-balance.dto';
 import { VendorStripeService } from './services/vendor-stripe.service';
 
 

@@ -17,8 +17,8 @@ import {
   PayoutStatus,
 } from '../../payout/infrastructure/persistence/document/entities/payout.schema';
 import { TicketStatus } from '../../tickets/infrastructure/persistence/document/entities/ticket.schema';
-import { UsersService } from 'src/users/users.service';
-import { MailService } from 'src/mail/mail.service';
+import { UsersService } from '../../users/users.service';
+import { MailService } from '../../mail/mail.service';
 
 @Injectable()
 export class StripeWebhookService {

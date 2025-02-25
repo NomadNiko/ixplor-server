@@ -14,8 +14,8 @@ import { TicketService } from '../tickets/ticket.service';
 import { StripeCheckoutService } from './services/stripe-checkout.service';
 import { StripeWebhookService } from './services/stripe-webhook.service';
 import { StripeRefundService } from './services/stripe-refund.service';
-import { UsersService } from 'src/users/users.service';
-import { MailService } from 'src/mail/mail.service';
+import { UsersService } from '../users/users.service';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class StripeService {

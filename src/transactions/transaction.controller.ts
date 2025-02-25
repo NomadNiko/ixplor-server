@@ -3,7 +3,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { TransactionService } from './transaction.service';
 import { TransactionSchemaClass, TransactionStatus, TransactionType } from './infrastructure/persistence/document/entities/transaction.schema';
-import { RoleEnum } from 'src/roles/roles.enum';
+import { RoleEnum } from '../roles/roles.enum';
 
 @ApiTags('Transactions')
 @Controller('transactions')

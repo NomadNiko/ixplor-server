@@ -12,7 +12,7 @@ import {
 import { TransactionSchemaClass } from '../../transactions/infrastructure/persistence/document/entities/transaction.schema';
 import { TransactionStatus, TransactionType } from '../../transactions/infrastructure/persistence/document/entities/transaction.schema';
 import { transformVendorResponse } from '../../utils/vendor.transform';
-import { PayoutSchemaClass, PayoutStatus } from 'src/payout/infrastructure/persistence/document/entities/payout.schema';
+import { PayoutSchemaClass, PayoutStatus } from '../../payout/infrastructure/persistence/document/entities/payout.schema';
 import { StripeBalanceResponseDto } from '../../stripe-connect/dto/stripe-balance.dto';
 import { StripeConnectService } from '../../stripe-connect/stripe-connect.service';
 

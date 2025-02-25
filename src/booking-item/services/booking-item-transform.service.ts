@@ -12,8 +12,23 @@ export class BookingItemTransformService {
       duration: item.duration,
       vendorId: item.vendorId,
       status: item.status,
-      createdAt: item.createdAt?.toISOString(),
-      updatedAt: item.updatedAt?.toISOString(),
+      date: item.date?.toISOString ? item.date.toISOString() : item.date,
+      location: {
+        type: 'Point',
+        coordinates: [
+          item.vendorLongitude !== undefined ? item.vendorLongitude : 
+          (item.longitude !== undefined ? item.longitude : null),
+          item.vendorLatitude !== undefined ? item.vendorLatitude : 
+          (item.latitude !== undefined ? item.latitude : null)
+        ]
+      },
+      latitude: item.vendorLatitude !== undefined ? item.vendorLatitude : 
+        (item.latitude !== undefined ? item.latitude : null),
+      longitude: item.vendorLongitude !== undefined ? item.vendorLongitude : 
+        (item.longitude !== undefined ? item.longitude : null),
+      vendorBusinessName: item.vendorBusinessName,
+      createdAt: item.createdAt?.toISOString ? item.createdAt.toISOString() : item.createdAt,
+      updatedAt: item.updatedAt?.toISOString ? item.updatedAt.toISOString() : item.updatedAt,
     };
   }
 }

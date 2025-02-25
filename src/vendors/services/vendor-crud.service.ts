@@ -5,7 +5,7 @@ import { VendorSchemaClass, VendorSchemaDocument } from '../infrastructure/persi
 import { CreateVendorDto } from '../dto/create-vendor.dto';
 import { UpdateVendorDto } from '../dto/update-vendor.dto';
 import { transformVendorResponse } from '../../utils/vendor.transform';
-import { UserSchemaClass } from 'src/users/infrastructure/persistence/document/entities/user.schema';
+import { UserSchemaClass } from '../../users/infrastructure/persistence/document/entities/user.schema';
 
 @Injectable()
 export class VendorCrudService {

@@ -10,6 +10,7 @@ import { VendorModule } from '../vendors/vendor.module';
 import { BookingItemQueryService } from './services/booking-item-query.service';
 import { BookingItemManagementService } from './services/booking-item-management.service';
 import { BookingItemTransformService } from './services/booking-item-transform.service';
+import { VendorSchema } from '../vendors/infrastructure/persistence/document/entities/vendor.schema';
 
 @Module({
   imports: [
@@ -18,6 +19,10 @@ import { BookingItemTransformService } from './services/booking-item-transform.s
         name: BookingItemSchemaClass.name,
         schema: BookingItemSchema,
       },
+      {
+        name: 'VendorSchemaClass',  // Add this
+        schema: VendorSchema
+      }
     ]),
     VendorModule,
   ],

@@ -28,6 +28,12 @@ export class BookingItemService {
   findByVendor = this.queryService.findByVendor.bind(this.queryService);
   findById = this.queryService.findById.bind(this.queryService);
 
+
+  // Nearby query methods
+  findNearby = this.queryService.findNearby.bind(this.queryService);
+  findNearbyToday = this.queryService.findNearbyToday.bind(this.queryService);
+
+
   // Management methods
   create = this.managementService.create.bind(this.managementService);
   update = this.managementService.update.bind(this.managementService);
