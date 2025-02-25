@@ -105,6 +105,8 @@ export class StaffUserManagementService {
     }
     
     const initialLength = staff.bookedObjects.length;
+    
+    // IMPORTANT: Change this line to filter by bookingId property, not _id
     staff.bookedObjects = staff.bookedObjects.filter(
       booking => booking.bookingId !== bookingId
     );

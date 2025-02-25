@@ -17,6 +17,7 @@ import { StripeRefundService } from './services/stripe-refund.service';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { BookingItemService } from 'src/booking-item/booking-item.service';
+import { VendorSchemaClass } from 'src/vendors/infrastructure/persistence/document/entities/vendor.schema';
 
 @Injectable()
 export class StripeService {
@@ -36,7 +37,8 @@ export class StripeService {
     private ticketService: TicketService,
     private userService: UsersService,
     private mailService: MailService,
-    private bookingItemService: BookingItemService
+    private bookingItemService: BookingItemService,
+    private vendorModel: Model<VendorSchemaClass>,
   ) {
     this.stripe = new Stripe(
       this.configService.get<string>('STRIPE_SECRET_KEY', { infer: true }) ?? '',
@@ -53,16 +55,17 @@ export class StripeService {
     );
 
     this.stripeWebhookService = new StripeWebhookService(
-      payoutModel,
-      configService,
-      transactionService,
-      vendorService,
-      cartService,
-      productItemService,
-      bookingItemService,
-      ticketService,
-      userService,
-      mailService
+      payoutModel,         // PayoutSchemaClass model
+      vendorModel,         // VendorSchemaClass model (this needs to be injected)
+      configService,       // ConfigService
+      transactionService,  // TransactionService
+      vendorService,       // VendorService
+      cartService,         // CartService
+      productItemService,  // ProductItemService
+      bookingItemService,  // BookingItemService
+      ticketService,       // TicketService
+      userService,         // UsersService
+      mailService          // MailService
     );
 
     this.stripeRefundService = new StripeRefundService(

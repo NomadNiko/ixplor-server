@@ -14,6 +14,7 @@ import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
 import { PayoutSchemaClass, PayoutSchema } from '../payout/infrastructure/persistence/document/entities/payout.schema';
 import { BookingItemModule } from 'src/booking-item/booking-item.module';
+import { VendorSchema, VendorSchemaClass } from 'src/vendors/infrastructure/persistence/document/entities/vendor.schema';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { BookingItemModule } from 'src/booking-item/booking-item.module';
       { 
         name: PayoutSchemaClass.name, 
         schema: PayoutSchema 
-      }
+      },
+      { name: VendorSchemaClass.name, schema: VendorSchema }
     ]),
     TransactionModule,
     VendorModule,

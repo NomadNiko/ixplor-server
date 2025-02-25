@@ -20,6 +20,7 @@ import { TicketStatus } from '../../tickets/infrastructure/persistence/document/
 import { UsersService } from '../../users/users.service';
 import { MailService } from '../../mail/mail.service';
 import { BookingItemService } from 'src/booking-item/booking-item.service';
+import { VendorSchemaClass } from 'src/vendors/infrastructure/persistence/document/entities/vendor.schema';
 
 @Injectable()
 export class StripeWebhookService {
@@ -28,6 +29,8 @@ export class StripeWebhookService {
   constructor(
     @InjectModel(PayoutSchemaClass.name)
     private payoutModel: Model<PayoutSchemaClass>,
+    @InjectModel(VendorSchemaClass.name) // Add this
+    private vendorModel: Model<VendorSchemaClass>, // Add this
     private configService: ConfigService,
     private transactionService: TransactionService,
     private vendorService: VendorService,
@@ -157,9 +160,11 @@ export class StripeWebhookService {
         );
         throw new Error('Missing payment intent ID in checkout session');
       }
+  
       console.log(
         `Storing payment intent ID ${paymentIntentId} for checkout session ${session.id}`,
       );
+  
       await this.transactionService.updateTransactionStatus(
         session.id,
         TransactionStatus.SUCCEEDED,
@@ -168,31 +173,49 @@ export class StripeWebhookService {
           paymentIntentId: paymentIntentId,
         },
       );
+  
       if (!session.metadata?.customerId || !session.metadata?.items) {
         throw new Error('Missing required metadata in checkout session');
       }
+  
       const customerId = session.metadata.customerId;
       
       // Parse the items from metadata
-      const items = JSON.parse(session.metadata.items) as Array<{
-        id: string;
-        q: number;
-        d: string;
-        t: string;
-        type?: string; // Add type to identify booking vs product
-      }>;
+      const items = JSON.parse(session.metadata.items);
+      
+      console.log('Processing checkout items:', JSON.stringify(items));
       
       for (const item of items) {
         try {
-          // Check if this is a booking item or a product item
+          // Check if this is a booking item or a product item based on type field
           const isBookingItem = item.type === 'booking';
           
           if (isBookingItem) {
             // Process as a booking item
+            console.log(`Processing booking item ${item.id}`);
             const bookingItem = await this.bookingItemService.findById(item.id);
+            
             if (!bookingItem?.data) {
               console.error(`Booking item ${item.id} not found`);
               continue;
+            }
+            
+            // Fetch vendor to get location coordinates
+            const vendor = await this.vendorModel.findById(bookingItem.data.vendorId)
+              .select('latitude longitude')
+              .lean();
+            
+            // Prepare location using vendor coordinates
+            let productLocation = {
+              type: 'Point',
+              coordinates: [0, 0] // Default fallback
+            };
+            
+            if (vendor && typeof vendor.longitude === 'number' && typeof vendor.latitude === 'number') {
+              productLocation = {
+                type: 'Point',
+                coordinates: [vendor.longitude, vendor.latitude]
+              };
             }
             
             for (let i = 0; i < item.q; i++) {
@@ -208,20 +231,53 @@ export class StripeWebhookService {
                 productDate: new Date(item.d),
                 productStartTime: item.t,
                 productDuration: bookingItem.data.duration,
-                productLocation: bookingItem.data.location,
-                productImageURL: bookingItem.data.imageURL,
-                productAdditionalInfo: bookingItem.data.additionalInfo,
+                productLocation: productLocation, // Use vendor location
+                productImageURL: bookingItem.data.imageURL || '',
+                productAdditionalInfo: bookingItem.data.additionalInfo || '',
                 productRequirements: [], // Booking items might not have requirements like products
                 productWaiver: '', // Assign appropriate waiver if available
                 quantity: 1,
+                vendorOwed: (bookingItem.data.price * 0.85) // Assuming 15% platform fee
               });
+              console.log(`Created ticket for booking item ${item.id}`);
             }
           } else {
             // Process as a product item (original behavior)
+            console.log(`Processing product item ${item.id}`);
             const productItem = await this.productItemService.findById(item.id);
+            
             if (!productItem?.data) {
               console.error(`Product item ${item.id} not found`);
               continue;
+            }
+            
+            // Validate product location
+            let productLocation = productItem.data.location;
+            
+            // If location is missing or has invalid coordinates, create a valid one
+            if (!productLocation || 
+                !productLocation.coordinates || 
+                !Array.isArray(productLocation.coordinates) ||
+                typeof productLocation.coordinates[0] !== 'number' ||
+                typeof productLocation.coordinates[1] !== 'number') {
+              
+              // Try to get vendor location as fallback
+              const vendor = await this.vendorModel.findById(productItem.data.vendorId)
+                .select('latitude longitude')
+                .lean();
+                
+              if (vendor && typeof vendor.longitude === 'number' && typeof vendor.latitude === 'number') {
+                productLocation = {
+                  type: 'Point',
+                  coordinates: [vendor.longitude, vendor.latitude]
+                };
+              } else {
+                // Last resort fallback
+                productLocation = {
+                  type: 'Point',
+                  coordinates: [0, 0]
+                };
+              }
             }
             
             for (let i = 0; i < item.q; i++) {
@@ -237,26 +293,31 @@ export class StripeWebhookService {
                 productDate: new Date(item.d),
                 productStartTime: item.t,
                 productDuration: productItem.data.duration,
-                productLocation: productItem.data.location,
-                productImageURL: productItem.data.imageURL,
-                productAdditionalInfo: productItem.data.additionalInfo,
-                productRequirements: productItem.data.requirements,
-                productWaiver: productItem.data.waiver,
+                productLocation: productLocation,
+                productImageURL: productItem.data.imageURL || '',
+                productAdditionalInfo: productItem.data.additionalInfo || '',
+                productRequirements: productItem.data.requirements || [],
+                productWaiver: productItem.data.waiver || '',
                 quantity: 1,
+                vendorOwed: (productItem.data.price * 0.85) // Assuming 15% platform fee
               });
+              console.log(`Created ticket for product item ${item.id}`);
             }
           }
         } catch (error) {
           console.error(`Error processing item ${item.id}:`, error);
+          // Continue with other items even if one fails
         }
       }
+      
+      // Clean up the cart after successful processing
       await this.cartService.deleteCart(customerId);
+      console.log(`Checkout completed successfully for customer ${customerId}`);
     } catch (error) {
       console.error('Error processing successful checkout:', error);
       throw error;
     }
   }
-
 
   private async handleCheckoutSessionExpired(session: Stripe.Checkout.Session) {
     try {
