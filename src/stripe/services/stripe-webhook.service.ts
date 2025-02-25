@@ -19,18 +19,18 @@ import {
 import { TicketStatus } from '../../tickets/infrastructure/persistence/document/entities/ticket.schema';
 import { UsersService } from '../../users/users.service';
 import { MailService } from '../../mail/mail.service';
-import { BookingItemService } from 'src/booking-item/booking-item.service';
-import { VendorSchemaClass } from 'src/vendors/infrastructure/persistence/document/entities/vendor.schema';
+import { BookingItemService } from '../../booking-item/booking-item.service';
+import { VendorSchemaClass } from '../../vendors/infrastructure/persistence/document/entities/vendor.schema';
 
 @Injectable()
 export class StripeWebhookService {
   private stripe: Stripe;
-
+  
   constructor(
     @InjectModel(PayoutSchemaClass.name)
     private payoutModel: Model<PayoutSchemaClass>,
-    @InjectModel(VendorSchemaClass.name) // Add this
-    private vendorModel: Model<VendorSchemaClass>, // Add this
+    @InjectModel(VendorSchemaClass.name)
+    private vendorModel: Model<VendorSchemaClass>,
     private configService: ConfigService,
     private transactionService: TransactionService,
     private vendorService: VendorService,
@@ -49,41 +49,36 @@ export class StripeWebhookService {
       },
     );
   }
+  
 
   async handleWebhookEvent(signature: string, payload: any) {
     try {
       const event = typeof payload === 'string' ? JSON.parse(payload) : payload;
       console.log('Processing webhook event type:', event.type);
-
       switch (event.type) {
         case 'checkout.session.completed':
           await this.handleCheckoutSessionCompleted(
             event.data.object as Stripe.Checkout.Session,
           );
           break;
-
         case 'payment_intent.payment_failed':
           await this.handlePaymentFailed(
             event.data.object as Stripe.PaymentIntent,
           );
           break;
-
         case 'checkout.session.expired':
           await this.handleCheckoutSessionExpired(
             event.data.object as Stripe.Checkout.Session,
           );
           break;
-
         case 'transfer.created':
           await this.handleTransferCreated(
             event.data.object as Stripe.Transfer,
           );
           break;
-
         case 'charge.succeeded':
           await this.handleChargeSucceeded(event.data.object as Stripe.Charge);
           break;
-
         case 'charge.refunded':
           const refundObject = event.data.object;
           const chargeObject = event.data.object;
@@ -99,12 +94,10 @@ export class StripeWebhookService {
             );
           }
           break;
-
         case 'charge.dispute.created':
           await this.handleDisputeCreated(event.data.object as Stripe.Dispute);
           break;
       }
-
       return { received: true };
     } catch (error) {
       console.error('Error handling webhook:', error);
@@ -117,12 +110,10 @@ export class StripeWebhookService {
       const payout = await this.payoutModel.findOne({
         'stripeTransferDetails.transferId': transfer.id,
       });
-
       if (!payout) {
         console.error(`No payout record found for transfer ID: ${transfer.id}`);
         return;
       }
-
       const updatedPayout = await this.payoutModel.findByIdAndUpdate(
         payout._id,
         {
@@ -134,11 +125,9 @@ export class StripeWebhookService {
         },
         { new: true },
       );
-
       console.log(
         `Payout ${payout._id} updated to SUCCEEDED status for transfer ${transfer.id}`,
       );
-
       return updatedPayout;
     } catch (error) {
       console.error('Error handling transfer.created webhook:', error);
@@ -147,7 +136,7 @@ export class StripeWebhookService {
       );
     }
   }
-
+  
   private async handleCheckoutSessionCompleted(
     session: Stripe.Checkout.Session,
   ) {
