@@ -104,17 +104,19 @@ export class StaffUserManagementService {
       throw new NotFoundException(`Staff user with ID ${staffId} not found`);
     }
     
-    const initialLength = staff.bookedObjects.length;
-    
-    // IMPORTANT: Change this line to filter by bookingId property, not _id
-    staff.bookedObjects = staff.bookedObjects.filter(
-      booking => booking.bookingId !== bookingId
+    // Find the booking index by bookingId
+    const bookingIndex = staff.bookedObjects.findIndex(
+      booking => booking.bookingId.toString() === bookingId.toString()
     );
     
-    if (staff.bookedObjects.length === initialLength) {
-      throw new NotFoundException(`Booking with ID ${bookingId} not found`);
+    // If booking is found, remove it
+    if (bookingIndex === -1) {
+      console.log(`Warning: Booking with ID ${bookingId} not found in staff ${staffId}'s bookings`);
+      return; // Don't throw an error, just log and return
     }
     
+    // Remove the booking
+    staff.bookedObjects.splice(bookingIndex, 1);
     staff.updatedAt = new Date();
     await staff.save();
   }
@@ -356,7 +358,7 @@ export class StaffUserManagementService {
     }
 
     const booking = staffUser.bookedObjects.find(
-      (b) => b._id && b._id.toString() === bookingId,
+      (b) => b.bookingId === bookingId,
     );
 
     if (!booking) {
@@ -466,7 +468,7 @@ export class StaffUserManagementService {
 
       // Find the booking
       const bookingIndex = fromStaff.bookedObjects.findIndex(
-        (b) => b._id && b._id.toString() === bookingId,
+        (b) => b.bookingId === bookingId,
       );
 
       if (bookingIndex === -1) {

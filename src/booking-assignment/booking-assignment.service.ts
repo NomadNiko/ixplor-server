@@ -183,12 +183,15 @@ export class BookingAssignmentService {
     try {
       const staffUser = await this.staffUserService.findById(staffId);
       if (!staffUser || !staffUser.data) {
-        throw new NotFoundException(`Staff with ID ${staffId} not found`);
+        console.log(`Staff with ID ${staffId} not found`);
+        return; // Simply return instead of throwing an error
       }
       
+      // Check if booking exists in the staff's bookings
       const hasBooking = staffUser.data.bookedObjects.some(booking => booking.bookingId === bookingId);
       if (!hasBooking) {
-        throw new NotFoundException(`Booking with ID ${bookingId} not found for staff ${staffId}`);
+        console.log(`Booking with ID ${bookingId} not found for staff ${staffId}, but continuing anyway`);
+        // Don't throw an error here, just log and continue
       }
       
       // Use the staffUserService to remove the booking
@@ -197,10 +200,11 @@ export class BookingAssignmentService {
       console.log(`Successfully removed booking ${bookingId} from staff ${staffId}`);
     } catch (error) {
       console.error(`Error removing booking ${bookingId} from staff ${staffId}:`, error);
+      // Re-throw the error so the calling function can handle it if needed
       throw error;
     }
   }
-
+  
   async addBooking(bookingData: {
     bookingItemId: string;
     startDateTime: Date;
