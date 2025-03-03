@@ -336,11 +336,11 @@ export class StaffScheduleService {
     try {
       let result;
       await session.withTransaction(async () => {
-        // Fix: Use StaffScheduleSchemaDocument instead of StaffScheduleSchemaClass
         const generatedSchedules: StaffScheduleSchemaDocument[] = [];
-        let currentDate = new Date(startDate);
+        const initialDate = new Date(startDate);
         
-        while (currentDate <= endDate) {
+        for (let currentDay = 0; initialDate.getTime() + (currentDay * 86400000) <= endDate.getTime(); currentDay++) {
+          const currentDate = new Date(initialDate.getTime() + (currentDay * 86400000));
           const dayOfWeek = currentDate.getDay();
           const roleShiftsResponse = await this.roleShiftService.findByVendor(vendorId);
           
@@ -369,8 +369,6 @@ export class StaffScheduleService {
               }
             }
           }
-          
-          currentDate.setDate(currentDate.getDate() + 1);
         }
         
         result = {
