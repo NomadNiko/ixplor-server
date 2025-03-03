@@ -13,7 +13,7 @@ export class CartCleanupService {
     private readonly productItemService: ProductItemService,
   ) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async handleCartCleanup() {
     try {
       const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000);

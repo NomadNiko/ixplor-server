@@ -100,9 +100,9 @@ export class TransactionService {
     return {
       _id: transaction._id.toString(),
       stripeCheckoutSessionId: transaction.stripeCheckoutSessionId,
+      paymentIntentId: transaction.paymentIntentId, // Add this line
       amount: transaction.amount,
       currency: transaction.currency,
-      vendorId: transaction.vendorId,
       customerId: transaction.customerId,
       productItemIds: transaction.productItemIds,
       status: transaction.status,
@@ -124,14 +124,132 @@ export class TransactionService {
     };
   }
 
+  async findByPaymentIntentId(paymentIntentId: string) {
+    try {
+      const transaction = await this.transactionModel.findOne({ 
+        paymentIntentId: paymentIntentId 
+      });
+      
+      return transaction;
+    } catch (error) {
+      console.error(`Error finding transaction by payment intent ID ${paymentIntentId}:`, error);
+      throw new InternalServerErrorException('Failed to find transaction by payment intent ID');
+    }
+  }
+  
+  async updateTransactionStatusByPaymentIntentId(
+    paymentIntentId: string, 
+    status: TransactionStatus,
+    additionalData: Partial<TransactionSchemaClass> = {}
+  ) {
+    try {
+      const transaction = await this.transactionModel.findOneAndUpdate(
+        { paymentIntentId: paymentIntentId },
+        { 
+          $set: {
+            status,
+            ...additionalData,
+            updatedAt: new Date()
+          }
+        },
+        { new: true }
+      );
+      
+      if (!transaction) {
+        throw new NotFoundException(`Transaction with payment intent ID ${paymentIntentId} not found`);
+      }
+      
+      console.log(`Updated transaction ${transaction._id} with new status ${status} and additional data`);
+      return transaction;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error(`Error updating transaction by payment intent ID ${paymentIntentId}:`, error);
+      throw new InternalServerErrorException('Failed to update transaction status by payment intent ID');
+    }
+  }
+
+  async addPartialRefund({
+    transactionId,
+    ticketId,
+    refundId,
+    amount,
+    reason
+  }: {
+    transactionId: string;
+    ticketId: string;
+    refundId: string;
+    amount: number;
+    reason?: string;
+  }): Promise<any> {
+    try {
+      // Create the partial refund entry
+      const partialRefund = {
+        ticketId,
+        refundId,
+        amount,
+        reason,
+        refundedAt: new Date()
+      };
+      
+      // Update the transaction to add this refund to the partialRefunds array
+      const updatedTransaction = await this.transactionModel.findByIdAndUpdate(
+        transactionId,
+        { 
+          $push: { partialRefunds: partialRefund },
+          // If this is the first partial refund, update status to partially refunded
+          $set: { 
+            status: TransactionStatus.PARTIALLY_REFUNDED,
+            updatedAt: new Date()
+          }
+        },
+        { new: true }
+      );
+      
+      if (!updatedTransaction) {
+        throw new NotFoundException(`Transaction with ID ${transactionId} not found`);
+      }
+      
+      console.log(`Added partial refund of ${amount/100} for ticket ${ticketId} to transaction ${transactionId}`);
+      return updatedTransaction;
+    } catch (error) {
+      console.error(`Error adding partial refund to transaction ${transactionId}:`, error);
+      throw new InternalServerErrorException('Failed to record partial refund');
+    }
+  }
+
   async findByVendorId(vendorId: string) {
     try {
       const transactions = await this.transactionModel
-        .find({ vendorId })
+        .find({
+          'metadata.items': {
+            $regex: `"vendorId":"${vendorId}"`,
+          }
+        })
         .sort({ createdAt: -1 });
   
+      // Now we need to filter the items to only show the relevant ones for this vendor
+      const filteredTransactions = transactions.map(transaction => {
+        if (!transaction.metadata){
+          console.log("ERROR: No metadata in Transaction Found. Contact Niko Now!");
+          throw new InternalServerErrorException('No metadata in Transaction Found.');
+        }
+        const parsedItems = JSON.parse(transaction.metadata.items || '[]');
+
+        const vendorItems = parsedItems.filter(item => item.vendorId === vendorId);
+        
+        return {
+          ...this.transformTransaction(transaction),
+          metadata: {
+            ...transaction.metadata,
+            items: JSON.stringify(vendorItems)
+          }
+        };
+      });
+  
       return {
-        data: transactions.map(transaction => this.transformTransaction(transaction)),
+        data: filteredTransactions,
       };
     } catch (error) {
       console.error('Error finding transactions for vendor:', error);

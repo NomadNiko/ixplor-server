@@ -1,13 +1,18 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsDate, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
-import { CartItemClass } from '../entities/cart.schema';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsDate, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { CartItemClass, CartItemType } from '../entities/cart.schema';
 import { Type } from 'class-transformer';
 
 export class AddToCartDto {
+  @ApiProperty({ enum: CartItemType, default: CartItemType.PRODUCT })
+  @IsEnum(CartItemType)
+  @IsOptional()
+  itemType?: CartItemType;
+
   @ApiProperty()
   @IsNotEmpty()
   @IsString()
-  vendorId: string;  // Add vendorId to DTO
+  vendorId: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
@@ -27,6 +32,48 @@ export class AddToCartDto {
   @Type(() => Date)
   @IsDate()
   productDate: Date;
+
+  // Booking-specific fields
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  bookingId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  staffId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  bookingItemId?: string;
+}
+
+export class AddBookingToCartDto {
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  vendorId: string;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  bookingItemId: string;
+
+  @ApiProperty({ example: '2025-02-10T00:00:00.000Z' })
+  @Type(() => Date)
+  @IsDate()
+  startDateTime: Date;
+
+  @ApiProperty()
+  @IsNumber()
+  duration: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  staffId?: string;
 }
 
 export class UpdateCartItemDto {

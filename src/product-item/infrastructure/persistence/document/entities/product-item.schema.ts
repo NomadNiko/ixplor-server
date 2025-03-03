@@ -79,6 +79,23 @@ export class ProductItemSchemaClass extends EntityDocumentHelper {
   })
   latitude: number;
 
+  @Prop({
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number],
+      required: true
+    }
+  })
+  location: {
+    type: string;
+    coordinates: number[];
+  };
+
+
   // Template snapshot fields
   @Prop({ required: true })
   templateName: string;

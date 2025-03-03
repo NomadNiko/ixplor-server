@@ -47,7 +47,7 @@ export class PayoutService {
       const payouts = await this.payoutModel
         .find({ vendorId })
         .sort({ createdAt: -1 });
-
+  
       return {
         data: payouts.map(this.transformPayout)
       };

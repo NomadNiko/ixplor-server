@@ -24,10 +24,8 @@ export class VendorSearchService {
     try {
       const query = this.buildPaginationQuery(params);
       const sortOptions = this.buildSortOptions(params);
-
       const totalDocs = await this.vendorModel.countDocuments(query);
       const totalPages = Math.ceil(totalDocs / params.pageSize);
-
       let vendors = await this.vendorModel
         .find(query)
         .sort(sortOptions)
@@ -35,11 +33,9 @@ export class VendorSearchService {
         .limit(params.pageSize)
         .lean()
         .exec();
-
       if (params.latitude && params.longitude) {
         vendors = this.sortByDistance(vendors, params);
       }
-
       return {
         data: vendors.map((vendor) => transformVendorResponse(vendor)),
         total: totalDocs,
@@ -56,28 +52,36 @@ export class VendorSearchService {
   }
 
   async findNearby(lat: number, lng: number, radius: number = 10) {
-    const radiusInMeters = radius * 1609.34; // Convert miles to meters
-
-    const vendors = await this.vendorModel
-      .find({
-        vendorStatus: 'APPROVED',
-        location: {
-          $near: {
-            $geometry: {
-              type: 'Point',
-              coordinates: [lng, lat],
-            },
-            $maxDistance: radiusInMeters,
-          },
-        },
-      })
-      .select('-__v')
-      .lean()
-      .exec();
-
-    return {
-      data: vendors.map((vendor) => transformVendorResponse(vendor)),
-    };
+    try {
+      // Use a standard query instead of geospatial query
+      const vendors = await this.vendorModel
+        .find({
+          vendorStatus: 'APPROVED',
+        })
+        .select('-__v')
+        .lean()
+        .exec();
+      
+      // Filter vendors by distance manually
+      const radiusInKm = radius * 1.60934; // Convert miles to km
+      const filteredVendors = vendors.filter(vendor => {
+        // Calculate distance between coordinates
+        const distance = calculateDistance(
+          lat, 
+          lng, 
+          vendor.latitude, 
+          vendor.longitude
+        );
+        return distance <= radiusInKm;
+      });
+      
+      return {
+        data: filteredVendors.map((vendor) => transformVendorResponse(vendor)),
+      };
+    } catch (error) {
+      console.error('Error finding nearby vendors:', error);
+      throw new InternalServerErrorException('Failed to fetch nearby vendors');
+    }
   }
 
   async findByType(type: VendorType) {
@@ -89,7 +93,6 @@ export class VendorSearchService {
       .select('-__v')
       .lean()
       .exec();
-
     return {
       data: vendors.map((vendor) => transformVendorResponse(vendor)),
     };
@@ -116,7 +119,6 @@ export class VendorSearchService {
     pageSize: number = 10,
   ): Promise<PaginatedVendorResponse> {
     try {
-      // Use findPaginated with location parameters
       return this.findPaginated({
         page,
         pageSize,
@@ -145,56 +147,47 @@ export class VendorSearchService {
     });
   }
 
-   buildPaginationQuery(params: VendorPaginationParams): any {
+  buildPaginationQuery(params: VendorPaginationParams): any {
     const query: any = {};
-
     if (params.status) {
       query.vendorStatus = params.status;
     }
-
     if (params.type) {
       query.vendorTypes = params.type;
     }
-
     if (params.city) {
       query.city = new RegExp(params.city, 'i');
     }
-
     if (params.state) {
       query.state = new RegExp(params.state, 'i');
     }
-
     if (params.postalCode) {
       query.postalCode = new RegExp(params.postalCode, 'i');
     }
-
     if (params.search) {
       query.$or = [
         { businessName: new RegExp(params.search, 'i') },
         { description: new RegExp(params.search, 'i') },
       ];
     }
-
     return query;
   }
 
-   buildSortOptions(params: VendorPaginationParams): any {
+  buildSortOptions(params: VendorPaginationParams): any {
     if (params.latitude && params.longitude) {
       return {};
     }
-
     const sortOrder = params.sortOrder === SortOrder.DESC ? -1 : 1;
     return { [params.sortField]: sortOrder };
   }
 
-   sortByDistance(
+  sortByDistance(
     vendors: any[],
     params: VendorPaginationParams,
   ): any[] {
     if (!params.latitude || !params.longitude) {
       return vendors;
     }
-
     return vendors.sort((a, b) => {
       const distA = calculateDistance(
         params.latitude!,

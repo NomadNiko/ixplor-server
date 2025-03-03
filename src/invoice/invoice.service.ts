@@ -10,11 +10,19 @@ import { InvoiceResponseDto } from './dto/invoice.dto';
 
 interface CartItemMetadata {
   productItemId: string;
+  vendorId: string;
   quantity: number;
   price: number;
   productDate: string;
   productStartTime: string;
   productDuration: number;
+}
+
+interface VendorInvoiceGroup {
+  vendorId: string;
+  vendorName: string;
+  subtotal: number;
+  items: any[];
 }
 
 @Injectable()
@@ -55,14 +63,25 @@ export class InvoiceService {
   async findByVendorId(vendorId: string): Promise<InvoiceResponseDto[]> {
     const transactions = await this.transactionModel
       .find({
-        vendorId,
+        'metadata.items': {
+          $regex: `"vendorId":"${vendorId}"`,
+        },
         type: 'payment',
         status: 'succeeded',
       })
       .sort({ createdAt: -1 })
       .lean();
 
-    return Promise.all(transactions.map((t) => this.transformToInvoice(t)));
+    return Promise.all(transactions.map(async (t) => {
+      const invoice = await this.transformToInvoice(t);
+      // Filter items to only show this vendor's items
+      const vendorGroup = invoice.vendorGroups.find(g => g.vendorId === vendorId);
+      return {
+        ...invoice,
+        vendorGroups: vendorGroup ? [vendorGroup] : [],
+        amount: vendorGroup?.subtotal || 0
+      };
+    }));
   }
 
   async isUserAssociatedWithVendor(
@@ -80,6 +99,7 @@ export class InvoiceService {
       const items = JSON.parse(metadata.items);
       return items.map(item => ({
         productItemId: item.productItemId,
+        vendorId: item.vendorId,
         quantity: item.quantity,
         price: item.price,
         productDate: item.productDate,
@@ -99,47 +119,67 @@ export class InvoiceService {
       ? `${customer.firstName} ${customer.lastName}`.trim()
       : 'Unknown Customer';
 
-    // Get vendor details
-    const vendor = await this.vendorModel.findById(transaction.vendorId).lean();
-    const vendorName = vendor?.businessName || 'Unknown Vendor';
-
     // Parse cart items from metadata
     const cartItems = this.parseCartItemsMetadata(transaction.metadata);
 
-    // Get product details for each item
+    // Get all unique vendor IDs from cart items
+    const vendorIds = [...new Set(cartItems.map(item => item.vendorId))];
+
+    // Get all vendors in one query
+    const vendors = await this.vendorModel.find({
+      _id: { $in: vendorIds }
+    }).lean();
+    const vendorMap = vendors.reduce((acc, vendor) => {
+      acc[vendor._id.toString()] = vendor.businessName;
+      return acc;
+    }, {});
+
+    // Get all products in one query
     const productItemIds = cartItems.map(item => item.productItemId);
     const products = await this.productItemModel.find({
       _id: { $in: productItemIds }
     }).lean();
-
-    // Create product ID to name mapping
-    const productNameMap = products.reduce((acc, product) => {
+    const productMap = products.reduce((acc, product) => {
       acc[product._id.toString()] = product.templateName;
       return acc;
     }, {});
 
-    // Create array of invoice items combining product details with cart metadata
-    const items = cartItems.map(cartItem => ({
-      productItemId: cartItem.productItemId,
-      productName: productNameMap[cartItem.productItemId] || 'Unknown Product',
-      price: cartItem.price,
-      quantity: cartItem.quantity,
-      productDate: cartItem.productDate,
-      productStartTime: cartItem.productStartTime,
-      productDuration: cartItem.productDuration
-    }));
+    // Group items by vendor
+    const vendorGroups: VendorInvoiceGroup[] = vendorIds.map(vendorId => {
+      const vendorItems = cartItems
+        .filter(item => item.vendorId === vendorId)
+        .map(item => ({
+          productItemId: item.productItemId,
+          productName: productMap[item.productItemId] || 'Unknown Product',
+          price: item.price,
+          quantity: item.quantity,
+          productDate: item.productDate,
+          productStartTime: item.productStartTime,
+          productDuration: item.productDuration
+        }));
+
+      const subtotal = vendorItems.reduce(
+        (sum, item) => sum + (item.price * item.quantity), 
+        0
+      );
+
+      return {
+        vendorId,
+        vendorName: vendorMap[vendorId] || 'Unknown Vendor',
+        subtotal,
+        items: vendorItems
+      };
+    });
 
     return {
       _id: transaction._id.toString(),
       stripeCheckoutSessionId: transaction.stripeCheckoutSessionId,
       amount: transaction.amount / 100,
       currency: transaction.currency,
-      vendorId: transaction.vendorId,
-      vendorName,
       customerId: transaction.customerId,
       customerName,
       productItemIds,
-      items,
+      vendorGroups,
       status: transaction.status,
       type: transaction.type,
       invoiceDate: transaction.createdAt?.toISOString(),

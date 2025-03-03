@@ -43,6 +43,34 @@ export interface StripePaymentMethodDetails {
   };
 }
 
+export interface CheckoutData {
+  chargeId: string;
+  amount: number;
+  amount_captured: number;
+  amount_refunded: number;
+  billing_details: {
+    address?: {
+      city?: string | null;
+      country?: string | null;
+      line1?: string | null;
+      line2?: string | null;
+      postal_code?: string | null;
+      state?: string | null;
+    } | null;
+    email?: string | null;
+    name?: string | null;
+    phone?: string | null;
+  };
+  captured: boolean;
+  created: number;
+  currency: string;
+  paid: boolean;
+  payment_intent: string;
+  payment_method: string;
+  receipt_email?: string | null;
+  receipt_url?: string | null;
+}
+
 @Schema({
   timestamps: true,
   toJSON: {
@@ -71,14 +99,14 @@ export class TransactionSchemaClass {
   })
   stripeCheckoutSessionId?: string;
 
+  @Prop()
+  paymentIntentId?: string;
+
   @Prop({ required: true })
   amount: number;
 
   @Prop({ required: true })
   currency: string;
-
-  @Prop({ required: true })
-  vendorId: string;
 
   @Prop({
     required: function (this: TransactionSchemaClass) {
@@ -91,7 +119,7 @@ export class TransactionSchemaClass {
     required: function (this: TransactionSchemaClass) {
       return this.type === TransactionType.PAYMENT;
     },
-    type: [String]
+    type: [String],
   })
   productItemIds?: string[];
 
@@ -141,14 +169,32 @@ export class TransactionSchemaClass {
 
   @Prop()
   error?: string;
+
+  @Prop({ type: [Object], default: [] })
+partialRefunds?: Array<{
+  ticketId: string;
+  refundId: string;
+  amount: number;
+  reason?: string;
+  refundedAt: Date;
+}>;
+
+@Prop({ type: Object })
+checkoutData?: CheckoutData;
 }
 
-export const TransactionSchema = SchemaFactory.createForClass(TransactionSchemaClass);
+export const TransactionSchema = SchemaFactory.createForClass(
+  TransactionSchemaClass,
+);
 
-TransactionSchema.index({ stripeCheckoutSessionId: 1 }, { unique: true, partialFilterExpression: { type: TransactionType.PAYMENT } });
+TransactionSchema.index(
+  { stripeCheckoutSessionId: 1 },
+  { unique: true, partialFilterExpression: { type: TransactionType.PAYMENT } },
+);
+TransactionSchema.index({ paymentIntentId: 1 }, { sparse: true });
 TransactionSchema.index({ vendorId: 1 });
 TransactionSchema.index({ customerId: 1 });
-TransactionSchema.index({ "productItemIds": 1 });
+TransactionSchema.index({ productItemIds: 1 });
 TransactionSchema.index({ status: 1 });
 TransactionSchema.index({ type: 1 });
 TransactionSchema.index({ createdAt: 1 });
