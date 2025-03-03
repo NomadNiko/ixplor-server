@@ -44,6 +44,12 @@ import { BookingItemModule } from './booking-item/booking-item.module';
 import { StaffUserModule } from './staff-user/staff-user.module';
 import { BookingAssignmentModule } from './booking-assignment/booking-assignment.module';
 import { BookingAvailabilityModule } from './booking-availability/booking-availability.module';
+import { StaffRoleModule } from './staff-role/staff-role.module';
+import { RoleShiftModule } from './role-shift/role-shift.module';
+import { StaffScheduleModule } from './staff-schedule/staff-schedule.module';
+import { ScheduleExceptionModule } from './schedule-exception/schedule-exception.module';
+import { AvailabilityModule } from './availability/availability.module';
+import { BookingCalendarModule } from './booking-calendar/booking-calendar.module';
 
 // <database-block>
 const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
@@ -126,6 +132,12 @@ const infrastructureDatabaseModule = (databaseConfig() as DatabaseConfig)
     StaffUserModule,
     BookingAssignmentModule,
     BookingAvailabilityModule,
+    StaffRoleModule,
+    RoleShiftModule,
+    StaffScheduleModule,
+    ScheduleExceptionModule,
+    AvailabilityModule,
+    BookingCalendarModule,
   ],
 })
 export class AppModule {}
