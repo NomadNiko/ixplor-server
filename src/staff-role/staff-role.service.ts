@@ -31,13 +31,18 @@ export class StaffRoleService {
       }
 
       const staffRole = new this.staffRoleModel(createStaffRoleDto);
-      const savedRole = await staffRole.save();
-      
-      return {
-        data: savedRole,
-        message: 'Staff role created successfully'
-      };
-    } catch (error) {
+    const savedRole = await staffRole.save();
+    
+    // Return the lean version to avoid serialization issues
+    const plainObject = savedRole.toObject();
+    return {
+      data: {
+        ...plainObject,
+        _id: plainObject._id.toString()
+      },
+      message: 'Staff role created successfully'
+    };
+  } catch (error) {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
         throw error;
       }
@@ -58,8 +63,19 @@ export class StaffRoleService {
 
   async findByVendor(vendorId: string) {
     try {
-      const roles = await this.staffRoleModel.find({ vendorId }).exec();
-      return { data: roles };
+      // Add .lean() to get plain JavaScript objects
+      const roles = await this.staffRoleModel
+        .find({ vendorId })
+        .lean()
+        .exec();
+      
+      return { 
+        data: roles.map(role => ({
+          ...role,
+          _id: role._id.toString()
+        })),
+        message: `Found ${roles.length} staff roles for vendor ${vendorId}`
+      };
     } catch (error) {
       console.error(`Error finding staff roles for vendor ${vendorId}:`, error);
       throw new InternalServerErrorException('Failed to fetch vendor staff roles');

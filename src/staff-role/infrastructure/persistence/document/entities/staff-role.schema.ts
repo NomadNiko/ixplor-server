@@ -6,10 +6,11 @@ export type StaffRoleSchemaDocument = HydratedDocument<StaffRoleSchemaClass>;
 
 @Schema({
   timestamps: true,
-  toJSON: {
-    transform: (_, ret) => {
+  toJSON:  {
+    transform: function(doc, ret) {
       ret._id = ret._id.toString();
-      delete ret.__v;
+      delete ret.$__;
+      delete ret.$isNew;
       return ret;
     },
     virtuals: true,
