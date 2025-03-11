@@ -121,8 +121,6 @@ export class SupportTicketController {
   }
 
   @Put(':id')
-  @UseGuards(RolesGuard)
-  @Roles(RoleEnum.admin)
   @ApiOperation({ summary: 'Update a support ticket' })
   @ApiParam({ name: 'id', description: 'Support ticket ID' })
   async update(
@@ -155,8 +153,6 @@ export class SupportTicketController {
   }
 
   @Put(':id/status')
-  @UseGuards(RolesGuard)
-  @Roles(RoleEnum.admin)
   @ApiOperation({ summary: 'Update ticket status' })
   @ApiParam({ name: 'id', description: 'Support ticket ID' })
   async updateStatus(
