@@ -6,6 +6,7 @@ import { MaybeType } from '../utils/types/maybe.type';
 import { MailerService } from '../mailer/mailer.service';
 import path from 'path';
 import { AllConfigType } from '../config/config.type';
+import { TicketEmailData } from './interfaces/ticket-email-data.interface';
 
 @Injectable()
 export class MailService {
@@ -97,6 +98,90 @@ export class MailService {
         text3,
         text4,
         text5
+      },
+    });
+  }
+
+  async sendSupportTicketEmail(
+    mailData: MailData<TicketEmailData>,
+  ): Promise<void> {
+    const i18n = I18nContext.current();
+    
+    // Default texts
+    let headingText = 'Support Ticket Update';
+    let subjectText = 'Update to Your Support Ticket';
+    let mainMessage = 'There has been an update to your support ticket.';
+    let latestUpdateText = 'Latest Update';
+    let ticketInfoText = 'Ticket Information';
+    let actionButtonText = 'View Ticket';
+    
+    // Set appropriate texts based on event type
+    switch (mailData.data.eventType) {
+      case 'created':
+        headingText = await i18n?.translate('support-ticket.created.heading') || 'Support Ticket Created';
+        subjectText = await i18n?.translate('support-ticket.created.subject', { 
+          args: { ticketId: mailData.data.ticketId } 
+        }) || `New Support Ticket Created: ${mailData.data.ticketId}`;
+        mainMessage = await i18n?.translate('support-ticket.created.message') || 
+          'Your support ticket has been created successfully.';
+        break;
+        
+      case 'updated':
+        headingText = await i18n?.translate('support-ticket.updated.heading') || 'Support Ticket Updated';
+        subjectText = await i18n?.translate('support-ticket.updated.subject', { 
+          args: { ticketId: mailData.data.ticketId } 
+        }) || `Update to Your Support Ticket: ${mailData.data.ticketId}`;
+        mainMessage = await i18n?.translate('support-ticket.updated.message') || 
+          'Your support ticket has been updated.';
+        break;
+        
+      case 'assigned':
+        headingText = await i18n?.translate('support-ticket.assigned.heading') || 'Support Ticket Assigned';
+        subjectText = await i18n?.translate('support-ticket.assigned.subject', { 
+          args: { ticketId: mailData.data.ticketId } 
+        }) || `Your Support Ticket Has Been Assigned: ${mailData.data.ticketId}`;
+        mainMessage = await i18n?.translate('support-ticket.assigned.message', { 
+          args: { assigneeName: mailData.data.assignedToName } 
+        }) || `Your support ticket has been assigned to ${mailData.data.assignedToName}.`;
+        break;
+        
+      case 'resolved':
+        headingText = await i18n?.translate('support-ticket.resolved.heading') || 'Support Ticket Resolved';
+        subjectText = await i18n?.translate('support-ticket.resolved.subject', { 
+          args: { ticketId: mailData.data.ticketId } 
+        }) || `Your Support Ticket Has Been Resolved: ${mailData.data.ticketId}`;
+        mainMessage = await i18n?.translate('support-ticket.resolved.message') || 
+          'Your support ticket has been resolved.';
+        break;
+    }
+    
+    // Additional translations
+    latestUpdateText = await i18n?.translate('support-ticket.latestUpdate') || 'Latest Update';
+    ticketInfoText = await i18n?.translate('support-ticket.ticketInfo') || 'Ticket Information';
+    actionButtonText = await i18n?.translate('support-ticket.viewTicket') || 'View Your Ticket';
+    
+    await this.mailerService.sendMail({
+      to: mailData.to,
+      subject: subjectText,
+      text: `${subjectText} - ${mailData.data.ticketUrl}`,
+      templatePath: path.join(
+        this.configService.getOrThrow('app.workingDirectory', {
+          infer: true,
+        }),
+        'src',
+        'mail',
+        'mail-templates',
+        'support-ticket.hbs',
+      ),
+      context: {
+        ...mailData.data,
+        headingText,
+        mainMessage,
+        latestUpdateText,
+        ticketInfoText,
+        actionButtonText,
+        currentYear: new Date().getFullYear(),
+        app_name: this.configService.get('app.name', { infer: true }),
       },
     });
   }
