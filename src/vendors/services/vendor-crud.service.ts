@@ -141,6 +141,8 @@ export class VendorCrudService {
     }
   }
 
+  
+
   async update(id: string, updateData: any) {
     try {
       // Check if the update data contains operators like $inc

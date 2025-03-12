@@ -23,7 +23,6 @@ import { MailService } from 'src/mail/mail.service';
 @Injectable()
 export class StripeWebhookService {
   private stripe: Stripe;
-
   constructor(
     @InjectModel(PayoutSchemaClass.name)
     private payoutModel: Model<PayoutSchemaClass>,
@@ -44,41 +43,34 @@ export class StripeWebhookService {
       },
     );
   }
-
   async handleWebhookEvent(signature: string, payload: any) {
     try {
       const event = typeof payload === 'string' ? JSON.parse(payload) : payload;
       console.log('Processing webhook event type:', event.type);
-
       switch (event.type) {
         case 'checkout.session.completed':
           await this.handleCheckoutSessionCompleted(
             event.data.object as Stripe.Checkout.Session,
           );
           break;
-
         case 'payment_intent.payment_failed':
           await this.handlePaymentFailed(
             event.data.object as Stripe.PaymentIntent,
           );
           break;
-
         case 'checkout.session.expired':
           await this.handleCheckoutSessionExpired(
             event.data.object as Stripe.Checkout.Session,
           );
           break;
-
         case 'transfer.created':
           await this.handleTransferCreated(
             event.data.object as Stripe.Transfer,
           );
           break;
-
         case 'charge.succeeded':
           await this.handleChargeSucceeded(event.data.object as Stripe.Charge);
           break;
-
         case 'charge.refunded':
           // Extract payment_intent directly from the webhook data
           const refundObject = event.data.object;
@@ -94,30 +86,25 @@ export class StripeWebhookService {
             );
           }
           break;
-
         case 'charge.dispute.created':
           await this.handleDisputeCreated(event.data.object as Stripe.Dispute);
           break;
       }
-
       return { received: true };
     } catch (error) {
       console.error('Error handling webhook:', error);
       throw new InternalServerErrorException('Webhook handling failed');
     }
   }
-
   async handleTransferCreated(transfer: Stripe.Transfer) {
     try {
       const payout = await this.payoutModel.findOne({
         'stripeTransferDetails.transferId': transfer.id,
       });
-
       if (!payout) {
         console.error(`No payout record found for transfer ID: ${transfer.id}`);
         return;
       }
-
       const updatedPayout = await this.payoutModel.findByIdAndUpdate(
         payout._id,
         {
@@ -129,11 +116,9 @@ export class StripeWebhookService {
         },
         { new: true },
       );
-
       console.log(
         `Payout ${payout._id} updated to SUCCEEDED status for transfer ${transfer.id}`,
       );
-
       return updatedPayout;
     } catch (error) {
       console.error('Error handling transfer.created webhook:', error);
@@ -142,7 +127,6 @@ export class StripeWebhookService {
       );
     }
   }
-
   private async handleCheckoutSessionCompleted(
     session: Stripe.Checkout.Session,
   ) {
@@ -156,11 +140,9 @@ export class StripeWebhookService {
         );
         throw new Error('Missing payment intent ID in checkout session');
       }
-
       console.log(
         `Storing payment intent ID ${paymentIntentId} for checkout session ${session.id}`,
       );
-
       // Store the payment intent ID during checkout completion
       await this.transactionService.updateTransactionStatus(
         session.id,
@@ -170,11 +152,9 @@ export class StripeWebhookService {
           paymentIntentId: paymentIntentId,
         },
       );
-
       if (!session.metadata?.customerId || !session.metadata?.items) {
         throw new Error('Missing required metadata in checkout session');
       }
-
       const customerId = session.metadata.customerId;
       const items = JSON.parse(session.metadata.items) as Array<{
         id: string;
@@ -182,14 +162,12 @@ export class StripeWebhookService {
         d: string;
         t: string;
       }>;
-
       for (const item of items) {
         const productItem = await this.productItemService.findById(item.id);
         if (!productItem?.data) {
           console.error(`Product item ${item.id} not found`);
           continue;
         }
-
         try {
           for (let i = 0; i < item.q; i++) {
             await this.ticketService.createTicket({
@@ -216,20 +194,17 @@ export class StripeWebhookService {
           console.error(`Error processing item ${item.id}:`, error);
         }
       }
-
       await this.cartService.deleteCart(customerId);
     } catch (error) {
       console.error('Error processing successful checkout:', error);
       throw error;
     }
   }
-
   private async handleCheckoutSessionExpired(session: Stripe.Checkout.Session) {
     try {
       if (!session.metadata?.customerId) {
         throw new Error('Missing customer ID in session metadata');
       }
-
       await this.cartService.setCheckoutStatus(
         session.metadata.customerId,
         false,
@@ -239,7 +214,6 @@ export class StripeWebhookService {
       throw error;
     }
   }
-
   private async handlePaymentFailed(paymentIntent: Stripe.PaymentIntent) {
     if (paymentIntent.metadata?.customerId) {
       await this.cartService.setCheckoutStatus(
@@ -247,7 +221,6 @@ export class StripeWebhookService {
         false,
       );
     }
-
     await this.transactionService.updateTransactionStatus(
       paymentIntent.id,
       TransactionStatus.FAILED,
@@ -256,7 +229,6 @@ export class StripeWebhookService {
       },
     );
   }
-
   private handleRefund(paymentIntentId: string, refundData: any) {
     try {
       // Just log the successful refund
@@ -264,7 +236,6 @@ export class StripeWebhookService {
         `Received successful refund confirmation for payment intent: ${paymentIntentId}`,
       );
       console.log(`Refund amount: ${refundData.amount_refunded / 100}`);
-
       // No status changes or ticket cancellations - everything was handled proactively
     } catch (error) {
       console.error(
@@ -273,7 +244,6 @@ export class StripeWebhookService {
       );
     }
   }
-
   private async handleDisputeCreated(dispute: Stripe.Dispute) {
     await this.transactionService.updateTransactionStatus(
       dispute.payment_intent as string,
@@ -285,10 +255,9 @@ export class StripeWebhookService {
       },
     );
   }
-
   private async handleChargeSucceeded(charge: Stripe.Charge) {
     // Wait 10 seconds to give Stripe time to finish checkout and send the next Webhook
-    await new Promise(resolve => setTimeout(resolve, 10000));
+    await new Promise((resolve) => setTimeout(resolve, 10000));
     try {
       if (!charge.payment_intent) {
         console.warn(
@@ -296,27 +265,22 @@ export class StripeWebhookService {
         );
         return;
       }
-
       const paymentIntentId =
         typeof charge.payment_intent === 'string'
           ? charge.payment_intent
           : charge.payment_intent.id;
-
       console.log(
         `Processing charge.succeeded for payment intent: ${paymentIntentId}`,
       );
-
       const transaction = await this.transactionService.findByPaymentIntentId(
         paymentIntentId,
       );
-
       if (!transaction) {
         console.warn(
           `No transaction found for payment intent: ${paymentIntentId}`,
         );
         return;
       }
-
       // Extract checkout data from charge with proper null handling
       const checkoutData: CheckoutData = {
         chargeId: charge.id,
@@ -341,7 +305,6 @@ export class StripeWebhookService {
         receipt_email: charge.receipt_email,
         receipt_url: charge.receipt_url,
       };
-
       // Update transaction with checkout data
       await this.transactionService.updateTransactionStatusByPaymentIntentId(
         paymentIntentId,
@@ -351,36 +314,33 @@ export class StripeWebhookService {
           receiptEmail: charge.receipt_email || undefined,
         },
       );
-
       console.log(
         `Successfully updated transaction with checkout data for payment intent: ${paymentIntentId}`,
       );
-
-      // Send receipt email to customer
-      try {
-        // Get the user's information from our system
-        if (transaction.customerId) {
-          const user = await this.userService.findById(transaction.customerId);
-          if (!user) {
-            console.warn(
-              `User not found for customer ID: ${transaction.customerId}`,
-            );
-            return;
-          }
-
-          // Get the tickets/items associated with this transaction
-          const tickets = await this.ticketService.findByTransactionId(
-            transaction.stripeCheckoutSessionId as string,
+      // Get the user's information from our system
+      if (transaction.customerId) {
+        const user = await this.userService.findById(transaction.customerId);
+        if (!user) {
+          console.warn(
+            `User not found for customer ID: ${transaction.customerId}`,
           );
+          return;
+        }
 
-          if (!tickets || tickets.length === 0) {
-            console.warn(
-              `No tickets found for transaction: ${transaction.stripeCheckoutSessionId}`,
-            );
-            return;
-          }
+        // Get the tickets associated with this transaction
+        const tickets = await this.ticketService.findByTransactionId(
+          transaction.stripeCheckoutSessionId as string,
+        );
+        if (!tickets || tickets.length === 0) {
+          console.warn(
+            `No tickets found for transaction: ${transaction.stripeCheckoutSessionId}`,
+          );
+          return;
+        }
 
-          // Prepare product items for email
+        // Send receipt email to customer
+        try {
+          // Prepare product items for customer email
           const productItems = tickets.map((ticket) => ({
             productName: ticket.productName,
             quantity: ticket.quantity,
@@ -391,7 +351,6 @@ export class StripeWebhookService {
             time: ticket.productStartTime,
           }));
 
-          // Send receipt email using our mail service
           await this.mailService.sendTransactionReceipt({
             to: user.email as string,
             data: {
@@ -405,14 +364,108 @@ export class StripeWebhookService {
               stripeReceiptUrl: checkoutData.receipt_url as string,
             },
           });
-
           console.log(
             `Receipt email sent to ${user.email} for transaction ${transaction._id}`,
           );
+        } catch (emailError) {
+          // Log error but don't fail the overall process
+          console.error('Error sending receipt email to customer:', emailError);
         }
-      } catch (emailError) {
-        // Log error but don't fail the overall process
-        console.error('Error sending receipt email:', emailError);
+
+        // Send notification emails to vendors
+        try {
+          // Group tickets by vendor
+          const ticketsByVendor = new Map<string, any[]>();
+          const customerName =
+            `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+            'Customer';
+
+          for (const ticket of tickets) {
+            if (!ticketsByVendor.has(ticket.vendorId)) {
+              ticketsByVendor.set(ticket.vendorId, []);
+            }
+            ticketsByVendor.get(ticket.vendorId)?.push(ticket);
+          }
+
+          // Get frontend URL for links
+          const frontendUrl = this.configService.get('app.frontendDomain', {
+            infer: true,
+          });
+
+          // Send emails to each vendor
+          for (const [vendorId, vendorTickets] of ticketsByVendor.entries()) {
+            // Get vendor info to calculate fees and get vendor name
+            const vendor = await this.vendorService.findById(vendorId);
+            if (!vendor || !vendor.data) {
+              console.warn(`Vendor data not found for vendor ID: ${vendorId}`);
+              continue;
+            }
+
+            // Get vendor owner info to get email address
+            const vendorOwner = await this.userService.findById(
+              vendor.data.ownerId,
+            );
+            if (!vendorOwner || !vendorOwner.email) {
+              console.warn(
+                `Vendor owner email not found for vendor ID: ${vendorId}`,
+              );
+              continue;
+            }
+
+            // Calculate vendor-specific totals
+            const vendorItemsTotal = vendorTickets.reduce(
+              (sum, ticket) => sum + ticket.productPrice,
+              0,
+            );
+
+            // Calculate platform fee using vendor's application fee rate
+            const feePercentage =
+              (vendor.data.vendorApplicationFee || 0.13) * 100; // Convert to percentage
+            const platformFee =
+              vendorItemsTotal * (vendor.data.vendorApplicationFee || 0.13);
+            const vendorEarnings = vendorItemsTotal - platformFee;
+
+            // Format items for email
+            const items = vendorTickets.map((ticket) => ({
+              productName: ticket.productName,
+              quantity: ticket.quantity,
+              price: ticket.productPrice,
+              date: ticket.productDate
+                ? new Date(ticket.productDate).toLocaleDateString()
+                : undefined,
+              time: ticket.productStartTime,
+              ticketId: ticket._id,
+            }));
+
+            // Send email to vendor
+            await this.mailService.sendVendorSaleNotification({
+              to: vendorOwner.email,
+              data: {
+                vendorName: vendor.data.businessName,
+                customerName,
+                transactionId: transaction._id.toString(),
+                purchaseDate: new Date().toLocaleDateString(),
+                vendorItemsTotal,
+                vendorEarnings,
+                platformFee,
+                feePercentage,
+                items,
+                vendorDashboardUrl: `${frontendUrl}/vendor-account/`,
+                ticketManagementUrl: `${frontendUrl}/ticket-validation`,
+              },
+            });
+
+            console.log(
+              `Sale notification email sent to vendor ${vendor.data.businessName} (${vendorOwner.email})`,
+            );
+          }
+        } catch (vendorEmailError) {
+          // Log error but don't fail the overall process
+          console.error(
+            'Error sending sale notification emails to vendors:',
+            vendorEmailError,
+          );
+        }
       }
     } catch (error) {
       console.error('Error handling charge.succeeded webhook:', error);

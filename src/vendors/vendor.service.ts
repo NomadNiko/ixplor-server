@@ -134,6 +134,7 @@ export class VendorService {
     return this.vendorProductService.getVendorProductStats(vendorId);
   }
 
+  findById = this.vendorCrudService.findById.bind(this.vendorCrudService); 
   
   async updateVendorBalance(vendorId: string, amountChange: number): Promise<void> {
     try {
