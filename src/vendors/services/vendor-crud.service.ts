@@ -213,7 +213,7 @@ export class VendorCrudService {
         const frontendDomain = this.configService.get('app.frontendDomain', {
           infer: true,
         });
-        const vendorStatusUrl = `${frontendDomain}/vendor/status`;
+        const vendorStatusUrl = `${frontendDomain}/vendor-status`;
 
         // Check if vendor has templates or products (for email steps)
         const hasTemplates = false; // This would need to be implemented with actual template check

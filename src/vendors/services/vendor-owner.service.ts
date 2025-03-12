@@ -256,7 +256,7 @@ export class VendorOwnerService {
       const frontendDomain = this.configService.get('app.frontendDomain', {
         infer: true,
       });
-      const vendorStatusUrl = `${frontendDomain}/vendor/dashboard`;
+      const vendorStatusUrl = `${frontendDomain}/vendor-account`;
 
       for (const ownerId of vendor.ownerIds) {
         const user = await this.userModel.findById(ownerId);

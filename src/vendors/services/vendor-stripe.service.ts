@@ -201,7 +201,7 @@ export class VendorStripeService {
       const frontendDomain = this.configService.get('app.frontendDomain', {
         infer: true,
       });
-      const vendorStatusUrl = `${frontendDomain}/vendor/status`;
+      const vendorStatusUrl = `${frontendDomain}/vendor-status`;
 
       for (const ownerId of vendor.ownerIds) {
         const user = await this.userModel.findById(ownerId);
