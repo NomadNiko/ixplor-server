@@ -185,6 +185,13 @@ export class VendorSchemaClass {
 
   @Prop([String])
   vendorPayouts: string[];
+
+  @Prop({
+    type: Boolean,
+    default: false
+  })
+  isStripeSetupComplete: boolean;
+  
 }
 
 export const VendorSchema = SchemaFactory.createForClass(VendorSchemaClass);

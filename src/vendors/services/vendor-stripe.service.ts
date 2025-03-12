@@ -75,6 +75,11 @@ export class VendorStripeService {
         vendor.stripeConnectId,
       );
 
+      console.log(
+        `[Stripe GET] Balance for ${vendorId}:`,
+        JSON.stringify(balance, null, 2),
+      );
+
       // Update vendor with new balance
       vendor.accountBalance = Math.round(balance.availableBalance * 100);
       vendor.pendingBalance = Math.round(balance.pendingBalance * 100);
@@ -123,24 +128,30 @@ export class VendorStripeService {
   /**
    * Comprehensively checks if a Stripe account has completed the onboarding process
    * and is ready to process payments.
-   * 
+   *
    * @param stripeData The Stripe account object from the API
    * @returns boolean indicating if onboarding is complete
    */
   private isStripeOnboardingComplete(stripeData: any): boolean {
+    console.log(
+      `[Stripe DEBUG] Checking onboarding status for account: ${stripeData.id}`,
+    );
+
     // Check the most fundamental requirements first
     if (!stripeData.details_submitted) {
-      console.log('Stripe onboarding incomplete: details not submitted');
+      console.log(
+        '[Stripe DEBUG] Onboarding incomplete: details not submitted',
+      );
       return false;
     }
 
     if (!stripeData.charges_enabled) {
-      console.log('Stripe onboarding incomplete: charges not enabled');
+      console.log('[Stripe DEBUG] Onboarding incomplete: charges not enabled');
       return false;
     }
 
     if (!stripeData.payouts_enabled) {
-      console.log('Stripe onboarding incomplete: payouts not enabled');
+      console.log('[Stripe DEBUG] Onboarding incomplete: payouts not enabled');
       return false;
     }
 
@@ -149,47 +160,115 @@ export class VendorStripeService {
       stripeData.requirements?.currently_due?.length > 0 ||
       stripeData.requirements?.past_due?.length > 0
     ) {
-      console.log('Stripe onboarding incomplete: requirements still pending', {
-        currently_due: stripeData.requirements?.currently_due,
-        past_due: stripeData.requirements?.past_due,
-      });
+      console.log(
+        '[Stripe DEBUG] Onboarding incomplete: requirements still pending',
+        {
+          currently_due: stripeData.requirements?.currently_due,
+          past_due: stripeData.requirements?.past_due,
+        },
+      );
       return false;
     }
 
     // Check if there's a disabled reason
     if (stripeData.requirements?.disabled_reason) {
-      console.log('Stripe onboarding incomplete: account disabled', {
+      console.log('[Stripe DEBUG] Onboarding incomplete: account disabled', {
         reason: stripeData.requirements.disabled_reason,
       });
       return false;
     }
 
-    // Check if capabilities needed for our platform are active
-    const hasRequiredCapabilities = 
-      stripeData.capabilities?.card_payments === 'active' && 
-      stripeData.capabilities?.transfers === 'active';
-    
-    if (!hasRequiredCapabilities) {
-      console.log('Stripe onboarding incomplete: required capabilities not active', {
-        capabilities: stripeData.capabilities,
-      });
-      return false;
+    // For Express accounts, ensure capabilities are active
+    if (stripeData.type === 'express' && stripeData.capabilities) {
+      const requiredCapabilities = ['card_payments', 'transfers'];
+      const hasRequiredCapabilities = requiredCapabilities.every(
+        (cap) => stripeData.capabilities[cap] === 'active',
+      );
+
+      if (!hasRequiredCapabilities) {
+        console.log(
+          '[Stripe DEBUG] Onboarding incomplete: required capabilities not active',
+          {
+            capabilities: stripeData.capabilities,
+          },
+        );
+        return false;
+      }
     }
 
     // If we passed all checks, the account is ready
-    console.log('Stripe onboarding complete: all checks passed');
+    console.log('[Stripe DEBUG] Onboarding check PASSED: all criteria met');
     return true;
   }
 
-  async updateStripeStatus(id: string, stripeData: any) {
+  async updateStripeStatus(id: string, webhookStripeData: any) {
     try {
-      // Get current vendor state to check if this is a completion change
+      // Log the incoming webhook data
+      console.log(
+        `[Stripe WEBHOOK] Received data for ${id}:`,
+        JSON.stringify(webhookStripeData, null, 2),
+      );
+
+      // Get current vendor state
       const currentVendor = await this.vendorModel.findById(id);
       if (!currentVendor) {
         throw new NotFoundException(`Vendor with ID ${id} not found`);
       }
 
-      // Store complete Stripe account info
+      // Always get fresh data directly from Stripe API to ensure accuracy
+      let stripeData;
+      let isSetupComplete = false;
+
+      if (currentVendor.stripeConnectId) {
+        try {
+          stripeData = await this.stripe.accounts.retrieve(
+            currentVendor.stripeConnectId,
+          );
+          console.log(
+            `[Stripe GET] Retrieved account data for ${id}:`,
+            JSON.stringify(stripeData, null, 2),
+          );
+
+          // Check for discrepancies between webhook and API data
+          if (
+            webhookStripeData.charges_enabled !== stripeData.charges_enabled ||
+            webhookStripeData.payouts_enabled !== stripeData.payouts_enabled ||
+            webhookStripeData.details_submitted !== stripeData.details_submitted
+          ) {
+            console.log(
+              '[Stripe WARNING] Discrepancy between webhook and API data:',
+              {
+                webhook: {
+                  charges_enabled: webhookStripeData.charges_enabled,
+                  payouts_enabled: webhookStripeData.payouts_enabled,
+                  details_submitted: webhookStripeData.details_submitted,
+                },
+                api: {
+                  charges_enabled: stripeData.charges_enabled,
+                  payouts_enabled: stripeData.payouts_enabled,
+                  details_submitted: stripeData.details_submitted,
+                },
+              },
+            );
+          }
+
+          // Determine if setup is complete based on ACTUAL Stripe API data
+          isSetupComplete = this.isStripeOnboardingComplete(stripeData);
+        } catch (error) {
+          console.error(
+            `[Stripe ERROR] Failed to fetch fresh account data: ${error.message}`,
+          );
+          // Use webhook data as fallback if API call fails, but don't trust it for completion status
+          stripeData = webhookStripeData;
+          isSetupComplete = false; // Be conservative if we can't verify
+        }
+      } else {
+        // No Stripe account ID yet, use webhook data but don't mark as complete
+        stripeData = webhookStripeData;
+        isSetupComplete = false;
+      }
+
+      // Use the verified Stripe data (or webhook data as fallback)
       const accountStatus = {
         chargesEnabled: stripeData.charges_enabled,
         payoutsEnabled: stripeData.payouts_enabled,
@@ -210,10 +289,16 @@ export class VendorStripeService {
         errors: this.mapStripeErrors(stripeData.requirements?.errors || []),
       };
 
+      // Check if the status has changed from not complete to complete
+      const wasSetupComplete = currentVendor.isStripeSetupComplete || false;
+      const statusChanged = !wasSetupComplete && isSetupComplete;
+
+      // Update the vendor document with the accurate status and explicit setup completion flag
       const updatedVendor = await this.vendorModel.findByIdAndUpdate(
         id,
         {
           stripeAccountStatus: accountStatus,
+          isStripeSetupComplete: isSetupComplete,
           updatedAt: new Date(),
         },
         { new: true },
@@ -223,13 +308,17 @@ export class VendorStripeService {
         throw new NotFoundException(`Vendor with ID ${id} not found`);
       }
 
-      // Check if the account was previously not fully onboarded and is now complete
-      const wasFullyOnboarded = this.isVendorStripeAccountComplete(currentVendor);
-      const isNowFullyOnboarded = this.isStripeOnboardingComplete(stripeData);
-      
+      console.log(
+        `[Stripe INFO] Vendor ${id} Stripe setup status: ${
+          isSetupComplete ? 'COMPLETE' : 'INCOMPLETE'
+        }`,
+      );
+
       // Only send notification if the account has just completed onboarding
-      if (!wasFullyOnboarded && isNowFullyOnboarded) {
-        console.log('Stripe onboarding just completed for vendor', id);
+      if (statusChanged) {
+        console.log(
+          `[Stripe INFO] Stripe onboarding just completed for vendor ${id}`,
+        );
         await this.notifyOwnersOfStripeCompletion(updatedVendor, stripeData);
       }
 
@@ -241,35 +330,11 @@ export class VendorStripeService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      console.error('Error updating Stripe status:', error);
+      console.error('[Stripe ERROR] Error updating Stripe status:', error);
       throw new InternalServerErrorException(
         'Failed to update Stripe account status',
       );
     }
-  }
-
-  /**
-   * Check if a vendor's stored Stripe account data indicates a complete account
-   */
-  private isVendorStripeAccountComplete(vendor: VendorSchemaClass): boolean {
-    if (!vendor.stripeAccountStatus) return false;
-    
-    const status = vendor.stripeAccountStatus;
-    
-    // Check basic requirements
-    if (!status.detailsSubmitted || !status.chargesEnabled || !status.payoutsEnabled) {
-      return false;
-    }
-    
-    // Check if there are pending requirements
-    if (
-      (status.currentlyDue && status.currentlyDue.length > 0) ||
-      (status.pastDue && status.pastDue.length > 0)
-    ) {
-      return false;
-    }
-    
-    return true;
   }
 
   private async notifyOwnersOfStripeCompletion(
@@ -278,13 +343,19 @@ export class VendorStripeService {
   ): Promise<void> {
     try {
       if (!vendor.ownerIds || vendor.ownerIds.length === 0) {
-        console.log(`No owners found for vendor ${(vendor as any)._id}`);
+        console.log(
+          `[Stripe INFO] No owners found for vendor ${(vendor as any)._id}`,
+        );
         return;
       }
 
-      // Perform one final verification before sending emails
-      if (!this.isStripeOnboardingComplete(stripeData)) {
-        console.log(`Aborting email notification: Stripe onboarding not fully complete for vendor ${(vendor as any)._id}`);
+      // Double-check that Stripe setup is really complete before notifying
+      if (!vendor.isStripeSetupComplete) {
+        console.log(
+          `[Stripe WARNING] Aborting email notification: Stripe setup is not marked complete for vendor ${
+            (vendor as any)._id
+          }`,
+        );
         return;
       }
 
@@ -323,11 +394,14 @@ export class VendorStripeService {
         });
 
         console.log(
-          `Stripe completion email sent to ${user.email} for vendor ${vendor.businessName}`,
+          `[Stripe INFO] Stripe completion email sent to ${user.email} for vendor ${vendor.businessName}`,
         );
       }
     } catch (error) {
-      console.error('Error sending Stripe completion emails:', error);
+      console.error(
+        '[Stripe ERROR] Error sending Stripe completion emails:',
+        error,
+      );
       // Don't throw error to prevent disrupting vendor update
     }
   }
@@ -351,17 +425,26 @@ export class VendorStripeService {
           );
         }
 
-        if (!vendor.stripeAccountStatus?.payoutsEnabled) {
+        // Check that Stripe setup is complete via our explicit flag
+        if (!vendor.isStripeSetupComplete) {
           throw new UnprocessableEntityException(
-            'Vendor payouts are not enabled',
+            'Stripe account setup is not complete. Please complete all required information on Stripe.',
           );
         }
 
-        // Do a final comprehensive check before allowing payout
-        const stripeAccount = await this.stripe.accounts.retrieve(vendor.stripeConnectId);
-        if (!this.isStripeOnboardingComplete(stripeAccount)) {
+        // Double-check with the Stripe API directly
+        const stripeAccount = await this.stripe.accounts.retrieve(
+          vendor.stripeConnectId,
+        );
+        console.log(
+          `[Stripe GET] Retrieved account for payout check (${vendorId}):`,
+          JSON.stringify(stripeAccount, null, 2),
+        );
+
+        // Verify all requirements are met for payout
+        if (!stripeAccount.payouts_enabled) {
           throw new UnprocessableEntityException(
-            'Stripe account setup is not complete. Please complete all required information on Stripe.',
+            'Payouts are not enabled for your Stripe account. Please complete the Stripe setup process.',
           );
         }
 
@@ -380,6 +463,10 @@ export class VendorStripeService {
           source_type: 'card',
           transfer_group: `payout_${vendor._id.toString()}`,
         });
+        console.log(
+          `[Stripe POST] Created transfer:`,
+          JSON.stringify(payout, null, 2),
+        );
 
         const payoutRecord = new this.payoutModel({
           vendorId: vendor._id.toString(),
@@ -424,7 +511,7 @@ export class VendorStripeService {
       ) {
         throw error;
       }
-      console.error('Error processing vendor payout:', error);
+      console.error('[Stripe ERROR] Error processing vendor payout:', error);
       throw new InternalServerErrorException('Failed to process payout');
     } finally {
       await session.endSession();
@@ -435,7 +522,7 @@ export class VendorStripeService {
     const vendor = await this.vendorModel
       .findById(id)
       .select(
-        'stripeConnectId stripeAccountStatus accountBalance pendingBalance',
+        'stripeConnectId stripeAccountStatus accountBalance pendingBalance isStripeSetupComplete',
       )
       .lean();
 
@@ -446,21 +533,54 @@ export class VendorStripeService {
     // If we have a stripeConnectId, fetch real-time data
     if (vendor.stripeConnectId) {
       try {
-        const stripeAccount = await this.stripe.accounts.retrieve(vendor.stripeConnectId);
+        const stripeAccount = await this.stripe.accounts.retrieve(
+          vendor.stripeConnectId,
+        );
+        console.log(
+          `[Stripe GET] Account status for ${id}:`,
+          JSON.stringify(stripeAccount, null, 2),
+        );
+
+        // Verify stripe status and update our database if needed
         const isComplete = this.isStripeOnboardingComplete(stripeAccount);
-        
+
+        // If there's a discrepancy between our stored state and the actual state, update it
+        if (vendor.isStripeSetupComplete !== isComplete) {
+          console.log(
+            `[Stripe WARNING] Stored setup status (${vendor.isStripeSetupComplete}) differs from actual status (${isComplete}). Updating vendor record.`,
+          );
+
+          await this.vendorModel.findByIdAndUpdate(id, {
+            isStripeSetupComplete: isComplete,
+            stripeAccountStatus: {
+              chargesEnabled: stripeAccount.charges_enabled,
+              payoutsEnabled: stripeAccount.payouts_enabled,
+              detailsSubmitted: stripeAccount.details_submitted,
+              currentlyDue: stripeAccount.requirements?.currently_due || [],
+              eventuallyDue: stripeAccount.requirements?.eventually_due || [],
+              pastDue: stripeAccount.requirements?.past_due || [],
+              errors: this.mapStripeErrors(
+                stripeAccount.requirements?.errors || [],
+              ),
+            },
+          });
+        }
+
         return {
           data: {
             stripeConnectId: vendor.stripeConnectId,
             accountStatus: vendor.stripeAccountStatus,
             accountBalance: vendor.accountBalance,
             pendingBalance: vendor.pendingBalance,
-            isComplete: isComplete,
-            setupProgress: this.calculateSetupProgress(stripeAccount)
+            isStripeSetupComplete: isComplete,
+            setupProgress: this.calculateSetupProgress(stripeAccount),
           },
         };
       } catch (error) {
-        console.error('Error fetching real-time Stripe status:', error);
+        console.error(
+          '[Stripe ERROR] Error fetching real-time Stripe status:',
+          error,
+        );
         // Fall back to stored data if Stripe API call fails
       }
     }
@@ -471,8 +591,8 @@ export class VendorStripeService {
         accountStatus: vendor.stripeAccountStatus,
         accountBalance: vendor.accountBalance,
         pendingBalance: vendor.pendingBalance,
-        isComplete: this.isVendorStripeAccountComplete(vendor as VendorSchemaClass),
-        setupProgress: 0 // Cannot calculate without Stripe data
+        isStripeSetupComplete: vendor.isStripeSetupComplete || false,
+        setupProgress: 0, // Cannot calculate without Stripe data
       },
     };
   }
@@ -482,23 +602,23 @@ export class VendorStripeService {
    */
   private calculateSetupProgress(stripeData: any): number {
     if (!stripeData) return 0;
-    
+
     // Start with basic profile weight
     let progress = 10; // 10% just for having an account
-    
+
     // Add weight for details submitted
     if (stripeData.details_submitted) progress += 30;
-    
+
     // Add weights for charges and payouts
     if (stripeData.charges_enabled) progress += 20;
     if (stripeData.payouts_enabled) progress += 20;
-    
+
     // Calculate requirement progress
-    const totalRequirements = 
-      (stripeData.requirements?.eventually_due?.length || 0) + 
-      (stripeData.requirements?.currently_due?.length || 0) + 
+    const totalRequirements =
+      (stripeData.requirements?.eventually_due?.length || 0) +
+      (stripeData.requirements?.currently_due?.length || 0) +
       (stripeData.requirements?.past_due?.length || 0);
-    
+
     // If there are no requirements at all, give the remaining 20%
     if (totalRequirements === 0) {
       progress += 20;
@@ -506,11 +626,15 @@ export class VendorStripeService {
       // Otherwise, calculate based on requirements left
       // This assumes 20 as an average number of total requirements
       const standardTotalRequirements = 20;
-      const remainingRequirementsWeight = 20 * (1 - (totalRequirements / standardTotalRequirements));
+      const remainingRequirementsWeight =
+        20 * (1 - totalRequirements / standardTotalRequirements);
       // Cap at 20% and ensure it's not negative
-      progress += Math.min(20, Math.max(0, remainingRequirementsWeight));
+      progress += Math.min(
+        20,
+        Math.max(0, Math.round(remainingRequirementsWeight)),
+      );
     }
-    
+
     // Ensure we don't exceed 100%
     return Math.min(100, Math.max(0, Math.round(progress)));
   }

@@ -24,6 +24,7 @@ export function transformVendorResponse(vendor: Record<string, any>) {
       accountBalance: vendor.accountBalance,
       pendingBalance: vendor.pendingBalance,
       internalAccountBalance: vendor.internalAccountBalance,
+      isStripeSetupComplete: vendor.isStripeSetupComplete,
       vendorApplicationFee: vendor.vendorApplicationFee || 0.13,
       vendorPayments: vendor.vendorPayments || [],
       vendorPayouts: vendor.vendorPayouts || [],
