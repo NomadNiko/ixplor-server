@@ -7,6 +7,7 @@ import { MailerService } from '../mailer/mailer.service';
 import path from 'path';
 import { AllConfigType } from '../config/config.type';
 import { TicketEmailData } from './interfaces/ticket-email-data.interface';
+import { VendorEmailData } from './interfaces/vendor-email-data.interface';
 
 @Injectable()
 export class MailService {
@@ -17,10 +18,15 @@ export class MailService {
 
   async userSignUp(mailData: MailData<{ hash: string }>): Promise<void> {
     const i18n = I18nContext.current();
-    const emailConfirmTitle = await i18n?.translate('common.confirmEmail') || 'Confirm email';
-    const text1 = await i18n?.translate('confirm-email.text1') || 'Hey!';
-    const text2 = await i18n?.translate('confirm-email.text2') || "You're almost ready to start enjoying";
-    const text3 = await i18n?.translate('confirm-email.text3') || 'Simply click the big blue button below to verify your email address.';
+    const emailConfirmTitle =
+      (await i18n?.translate('common.confirmEmail')) || 'Confirm email';
+    const text1 = (await i18n?.translate('confirm-email.text1')) || 'Hey!';
+    const text2 =
+      (await i18n?.translate('confirm-email.text2')) ||
+      "You're almost ready to start enjoying";
+    const text3 =
+      (await i18n?.translate('confirm-email.text3')) ||
+      'Simply click the big blue button below to verify your email address.';
 
     const url = new URL(
       this.configService.getOrThrow('app.frontendDomain', {
@@ -58,12 +64,21 @@ export class MailService {
     mailData: MailData<{ hash: string; tokenExpires: number }>,
   ): Promise<void> {
     const i18n = I18nContext.current();
-    const resetPasswordTitle = await i18n?.translate('common.resetPassword') || 'Reset password';
-    const text1 = await i18n?.translate('reset-password.text1') || 'Forgot it again?';
-    const text2 = await i18n?.translate('reset-password.text2') || 'We got you Fam.';
-    const text3 = await i18n?.translate('reset-password.text3') || 'Just press the button below and follow the instructions.';
-    const text4 = await i18n?.translate('reset-password.text4') || 'We’ll have you up and running in no time.';
-    const text5 = await i18n?.translate('reset-password.text5') || 'If you did not make this request then please ignore this email.';
+    const resetPasswordTitle =
+      (await i18n?.translate('common.resetPassword')) || 'Reset password';
+    const text1 =
+      (await i18n?.translate('reset-password.text1')) || 'Forgot it again?';
+    const text2 =
+      (await i18n?.translate('reset-password.text2')) || 'We got you Fam.';
+    const text3 =
+      (await i18n?.translate('reset-password.text3')) ||
+      'Just press the button below and follow the instructions.';
+    const text4 =
+      (await i18n?.translate('reset-password.text4')) ||
+      'We’ll have you up and running in no time.';
+    const text5 =
+      (await i18n?.translate('reset-password.text5')) ||
+      'If you did not make this request then please ignore this email.';
 
     const url = new URL(
       this.configService.getOrThrow('app.frontendDomain', {
@@ -97,7 +112,7 @@ export class MailService {
         text2,
         text3,
         text4,
-        text5
+        text5,
       },
     });
   }
@@ -106,7 +121,7 @@ export class MailService {
     mailData: MailData<TicketEmailData>,
   ): Promise<void> {
     const i18n = I18nContext.current();
-    
+
     // Default texts
     let headingText = 'Support Ticket Update';
     let subjectText = 'Update to Your Support Ticket';
@@ -114,52 +129,76 @@ export class MailService {
     let latestUpdateText = 'Latest Update';
     let ticketInfoText = 'Ticket Information';
     let actionButtonText = 'View Ticket';
-    
+
     // Set appropriate texts based on event type
     switch (mailData.data.eventType) {
       case 'created':
-        headingText = await i18n?.translate('support-ticket.created.heading') || 'Support Ticket Created';
-        subjectText = await i18n?.translate('support-ticket.created.subject', { 
-          args: { ticketId: mailData.data.ticketId } 
-        }) || `New Support Ticket Created: ${mailData.data.ticketId}`;
-        mainMessage = await i18n?.translate('support-ticket.created.message') || 
+        headingText =
+          (await i18n?.translate('support-ticket.created.heading')) ||
+          'Support Ticket Created';
+        subjectText =
+          (await i18n?.translate('support-ticket.created.subject', {
+            args: { ticketId: mailData.data.ticketId },
+          })) || `New Support Ticket Created: ${mailData.data.ticketId}`;
+        mainMessage =
+          (await i18n?.translate('support-ticket.created.message')) ||
           'Your support ticket has been created successfully.';
         break;
-        
+
       case 'updated':
-        headingText = await i18n?.translate('support-ticket.updated.heading') || 'Support Ticket Updated';
-        subjectText = await i18n?.translate('support-ticket.updated.subject', { 
-          args: { ticketId: mailData.data.ticketId } 
-        }) || `Update to Your Support Ticket: ${mailData.data.ticketId}`;
-        mainMessage = await i18n?.translate('support-ticket.updated.message') || 
+        headingText =
+          (await i18n?.translate('support-ticket.updated.heading')) ||
+          'Support Ticket Updated';
+        subjectText =
+          (await i18n?.translate('support-ticket.updated.subject', {
+            args: { ticketId: mailData.data.ticketId },
+          })) || `Update to Your Support Ticket: ${mailData.data.ticketId}`;
+        mainMessage =
+          (await i18n?.translate('support-ticket.updated.message')) ||
           'Your support ticket has been updated.';
         break;
-        
+
       case 'assigned':
-        headingText = await i18n?.translate('support-ticket.assigned.heading') || 'Support Ticket Assigned';
-        subjectText = await i18n?.translate('support-ticket.assigned.subject', { 
-          args: { ticketId: mailData.data.ticketId } 
-        }) || `Your Support Ticket Has Been Assigned: ${mailData.data.ticketId}`;
-        mainMessage = await i18n?.translate('support-ticket.assigned.message', { 
-          args: { assigneeName: mailData.data.assignedToName } 
-        }) || `Your support ticket has been assigned to ${mailData.data.assignedToName}.`;
+        headingText =
+          (await i18n?.translate('support-ticket.assigned.heading')) ||
+          'Support Ticket Assigned';
+        subjectText =
+          (await i18n?.translate('support-ticket.assigned.subject', {
+            args: { ticketId: mailData.data.ticketId },
+          })) ||
+          `Your Support Ticket Has Been Assigned: ${mailData.data.ticketId}`;
+        mainMessage =
+          (await i18n?.translate('support-ticket.assigned.message', {
+            args: { assigneeName: mailData.data.assignedToName },
+          })) ||
+          `Your support ticket has been assigned to ${mailData.data.assignedToName}.`;
         break;
-        
+
       case 'resolved':
-        headingText = await i18n?.translate('support-ticket.resolved.heading') || 'Support Ticket Resolved';
-        subjectText = await i18n?.translate('support-ticket.resolved.subject', { 
-          args: { ticketId: mailData.data.ticketId } 
-        }) || `Your Support Ticket Has Been Resolved: ${mailData.data.ticketId}`;
-        mainMessage = await i18n?.translate('support-ticket.resolved.message') || 
+        headingText =
+          (await i18n?.translate('support-ticket.resolved.heading')) ||
+          'Support Ticket Resolved';
+        subjectText =
+          (await i18n?.translate('support-ticket.resolved.subject', {
+            args: { ticketId: mailData.data.ticketId },
+          })) ||
+          `Your Support Ticket Has Been Resolved: ${mailData.data.ticketId}`;
+        mainMessage =
+          (await i18n?.translate('support-ticket.resolved.message')) ||
           'Your support ticket has been resolved.';
         break;
     }
-    
+
     // Additional translations
-    latestUpdateText = await i18n?.translate('support-ticket.latestUpdate') || 'Latest Update';
-    ticketInfoText = await i18n?.translate('support-ticket.ticketInfo') || 'Ticket Information';
-    actionButtonText = await i18n?.translate('support-ticket.viewTicket') || 'View Your Ticket';
-    
+    latestUpdateText =
+      (await i18n?.translate('support-ticket.latestUpdate')) || 'Latest Update';
+    ticketInfoText =
+      (await i18n?.translate('support-ticket.ticketInfo')) ||
+      'Ticket Information';
+    actionButtonText =
+      (await i18n?.translate('support-ticket.viewTicket')) ||
+      'View Your Ticket';
+
     await this.mailerService.sendMail({
       to: mailData.to,
       subject: subjectText,
@@ -188,10 +227,15 @@ export class MailService {
 
   async confirmNewEmail(mailData: MailData<{ hash: string }>): Promise<void> {
     const i18n = I18nContext.current();
-    const emailConfirmTitle = await i18n?.translate('common.confirmEmail') || 'Confirm email';
-    const text1 = await i18n?.translate('confirm-new-email.text1') || 'Hey!';
-    const text2 = await i18n?.translate('confirm-new-email.text2') || 'Confirm your new email address.';
-    const text3 = await i18n?.translate('confirm-new-email.text3') || 'Simply click the big blue button below to verify your email address.';
+    const emailConfirmTitle =
+      (await i18n?.translate('common.confirmEmail')) || 'Confirm email';
+    const text1 = (await i18n?.translate('confirm-new-email.text1')) || 'Hey!';
+    const text2 =
+      (await i18n?.translate('confirm-new-email.text2')) ||
+      'Confirm your new email address.';
+    const text3 =
+      (await i18n?.translate('confirm-new-email.text3')) ||
+      'Simply click the big blue button below to verify your email address.';
 
     const url = new URL(
       this.configService.getOrThrow('app.frontendDomain', {
@@ -225,30 +269,42 @@ export class MailService {
     });
   }
 
-  async sendTransactionReceipt(mailData: MailData<{
-    userName: string;
-    transactionId: string;
-    amount: number;
-    purchaseDate: string;
-    productItems: Array<{
-      productName: string;
-      quantity: number;
-      price: number;
-      date?: string;
-      time?: string;
-    }>;
-    stripeReceiptUrl?: string;
-  }>): Promise<void> {
+  async sendTransactionReceipt(
+    mailData: MailData<{
+      userName: string;
+      transactionId: string;
+      amount: number;
+      purchaseDate: string;
+      productItems: Array<{
+        productName: string;
+        quantity: number;
+        price: number;
+        date?: string;
+        time?: string;
+      }>;
+      stripeReceiptUrl?: string;
+    }>,
+  ): Promise<void> {
     const i18n = I18nContext.current();
-    const receiptTitle = await i18n?.translate('common.transactionReceipt') || 'Your Purchase Receipt';
-    const text1 = await i18n?.translate('transaction-receipt.text1') || 'Thank you for your purchase!';
-    const text2 = await i18n?.translate('transaction-receipt.text2') || 'Here are the details of your order:';
-    const text3 = await i18n?.translate('transaction-receipt.text3') || 'You can view your tickets in your account dashboard.';
-  
+    const receiptTitle =
+      (await i18n?.translate('common.transactionReceipt')) ||
+      'Your Purchase Receipt';
+    const text1 =
+      (await i18n?.translate('transaction-receipt.text1')) ||
+      'Thank you for your purchase!';
+    const text2 =
+      (await i18n?.translate('transaction-receipt.text2')) ||
+      'Here are the details of your order:';
+    const text3 =
+      (await i18n?.translate('transaction-receipt.text3')) ||
+      'You can view your tickets in your account dashboard.';
+
     await this.mailerService.sendMail({
       to: mailData.to,
       subject: `${receiptTitle} #${mailData.data.transactionId.slice(-6)}`,
-      text: `${receiptTitle} for Transaction #${mailData.data.transactionId.slice(-6)}`,
+      text: `${receiptTitle} for Transaction #${mailData.data.transactionId.slice(
+        -6,
+      )}`,
       templatePath: path.join(
         this.configService.getOrThrow('app.workingDirectory', {
           infer: true,
@@ -265,18 +321,96 @@ export class MailService {
         formattedTransactionId: mailData.data.transactionId.slice(-6),
         amount: (mailData.data.amount / 100).toFixed(2),
         purchaseDate: mailData.data.purchaseDate,
-        productItems: mailData.data.productItems.map(item => ({
+        productItems: mailData.data.productItems.map((item) => ({
           ...item,
-          formattedPrice: (item.price).toFixed(2),
-          formattedTotal: (item.price * item.quantity).toFixed(2)
+          formattedPrice: item.price.toFixed(2),
+          formattedTotal: (item.price * item.quantity).toFixed(2),
         })),
         appName: this.configService.get('app.name', { infer: true }),
         stripeReceiptUrl: mailData.data.stripeReceiptUrl,
-        ixplorDashUrl: "https://ixplor.app/dashboard/",
+        ixplorDashUrl: 'https://ixplor.app/dashboard/',
         text1,
         text2,
         text3,
-        currentYear: new Date().getFullYear() // Add this to fix the template error
+        currentYear: new Date().getFullYear(), // Add this to fix the template error
+      },
+    });
+  }
+
+  async sendVendorCreatedEmail(
+    mailData: MailData<VendorEmailData>,
+  ): Promise<void> {
+    const i18n = I18nContext.current();
+
+    await this.mailerService.sendMail({
+      to: mailData.to,
+      subject: 'Your iXplor Vendor Profile Has Been Created',
+      text: `Your vendor profile "${mailData.data.vendorName}" has been created successfully on iXplor.`,
+      templatePath: path.join(
+        this.configService.getOrThrow('app.workingDirectory', {
+          infer: true,
+        }),
+        'src',
+        'mail',
+        'mail-templates',
+        'vendor-created.hbs',
+      ),
+      context: {
+        ...mailData.data,
+        currentYear: new Date().getFullYear(),
+        app_name: this.configService.get('app.name', { infer: true }),
+      },
+    });
+  }
+
+  async sendVendorStripeCompleteEmail(
+    mailData: MailData<VendorEmailData>,
+  ): Promise<void> {
+    const i18n = I18nContext.current();
+
+    await this.mailerService.sendMail({
+      to: mailData.to,
+      subject: 'Stripe Setup Complete for Your iXplor Vendor Account',
+      text: `Your Stripe payment processing for "${mailData.data.vendorName}" has been set up successfully.`,
+      templatePath: path.join(
+        this.configService.getOrThrow('app.workingDirectory', {
+          infer: true,
+        }),
+        'src',
+        'mail',
+        'mail-templates',
+        'vendor-stripe-complete.hbs',
+      ),
+      context: {
+        ...mailData.data,
+        currentYear: new Date().getFullYear(),
+        app_name: this.configService.get('app.name', { infer: true }),
+      },
+    });
+  }
+
+  async sendVendorApprovedEmail(
+    mailData: MailData<VendorEmailData>,
+  ): Promise<void> {
+    const i18n = I18nContext.current();
+
+    await this.mailerService.sendMail({
+      to: mailData.to,
+      subject: 'Congratulations! Your iXplor Vendor Account is Now Live',
+      text: `Congratulations! Your vendor "${mailData.data.vendorName}" has been approved and is now live on iXplor.`,
+      templatePath: path.join(
+        this.configService.getOrThrow('app.workingDirectory', {
+          infer: true,
+        }),
+        'src',
+        'mail',
+        'mail-templates',
+        'vendor-approved.hbs',
+      ),
+      context: {
+        ...mailData.data,
+        currentYear: new Date().getFullYear(),
+        app_name: this.configService.get('app.name', { infer: true }),
       },
     });
   }

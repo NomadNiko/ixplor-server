@@ -22,6 +22,7 @@ import {
   PayoutSchema,
 } from '../payout/infrastructure/persistence/document/entities/payout.schema';
 import { StripeConnectModule } from '../stripe-connect/stripe-connect.module';
+import { MailModule } from '../mail/mail.module'; // Add this import
 
 @Module({
   imports: [
@@ -37,15 +38,13 @@ import { StripeConnectModule } from '../stripe-connect/stripe-connect.module';
       {
         name: PayoutSchemaClass.name,
         schema: PayoutSchema,
-      }
+      },
     ]),
     ConfigModule,
-    StripeConnectModule
+    StripeConnectModule,
+    MailModule, // Add this to imports
   ],
-  controllers: [
-    VendorController,
-    VendorV1Controller
-  ],
+  controllers: [VendorController, VendorV1Controller],
   providers: [
     VendorService,
     VendorCrudService,
@@ -61,6 +60,6 @@ import { StripeConnectModule } from '../stripe-connect/stripe-connect.module';
     VendorStripeService,
     VendorOwnerService,
     VendorProductService,
-  ]
+  ],
 })
 export class VendorModule {}

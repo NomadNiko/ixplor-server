@@ -1,10 +1,21 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { VendorSchemaClass, VendorSchemaDocument, VendorStatusEnum } from '../infrastructure/persistence/document/entities/vendor.schema';
+import {
+  VendorSchemaClass,
+  VendorSchemaDocument,
+  VendorStatusEnum,
+} from '../infrastructure/persistence/document/entities/vendor.schema';
 import { UserSchemaClass } from '../../users/infrastructure/persistence/document/entities/user.schema';
 import { RoleEnum } from '../../roles/roles.enum';
 import { transformVendorResponse } from '../../utils/vendor.transform';
+import { MailService } from '../../mail/mail.service';
+import { VendorEmailData } from '../../mail/interfaces/vendor-email-data.interface';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class VendorOwnerService {
@@ -13,25 +24,27 @@ export class VendorOwnerService {
     private readonly vendorModel: Model<VendorSchemaDocument>,
     @InjectModel(UserSchemaClass.name)
     private readonly userModel: Model<UserSchemaClass>,
+    private readonly mailService: MailService,
+    private readonly configService: ConfigService,
   ) {}
 
   async findVendorsOwnedByUser(userId: string) {
     try {
       const vendors = await this.vendorModel
         .find({
-          ownerIds: userId
+          ownerIds: userId,
         })
         .select('-__v -adminNotes')
         .lean()
         .exec();
-  
+
       return {
         data: vendors.map((vendor) => ({
           ...transformVendorResponse(vendor),
           stripeConnectId: vendor.stripeConnectId,
           stripeAccountStatus: vendor.stripeAccountStatus,
           accountBalance: vendor.accountBalance,
-          pendingBalance: vendor.pendingBalance
+          pendingBalance: vendor.pendingBalance,
         })),
       };
     } catch (error) {
@@ -113,7 +126,7 @@ export class VendorOwnerService {
 
   async approveVendor(vendorId: string, userId: string) {
     const session = await this.vendorModel.db.startSession();
-    
+
     try {
       let approvedVendor;
       await session.withTransaction(async () => {
@@ -131,16 +144,13 @@ export class VendorOwnerService {
             },
           )
           .lean();
-
         if (!approvedVendor) {
           throw new NotFoundException(`Vendor with ID ${vendorId} not found`);
         }
-
         const user = await this.userModel.findById(userId).session(session);
         if (!user) {
           throw new NotFoundException(`User with ID ${userId} not found`);
         }
-
         if (user.role?._id !== '1' && user.role?._id !== '3') {
           await this.userModel.findByIdAndUpdate(
             userId,
@@ -154,7 +164,6 @@ export class VendorOwnerService {
             },
           );
         }
-
         if (!approvedVendor.ownerIds.includes(userId)) {
           await this.vendorModel.findByIdAndUpdate(
             vendorId,
@@ -167,6 +176,14 @@ export class VendorOwnerService {
         }
       });
 
+      // After successful approval, send notification emails
+      if (approvedVendor) {
+        const vendor = await this.vendorModel.findById(vendorId);
+        if (vendor) {
+          await this.notifyOwnersOfVendorApproval(vendor);
+        }
+      }
+
       return {
         data: transformVendorResponse(approvedVendor),
         message: 'Vendor successfully approved and user role updated',
@@ -176,25 +193,32 @@ export class VendorOwnerService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to approve vendor and update user role');
+      throw new InternalServerErrorException(
+        'Failed to approve vendor and update user role',
+      );
     } finally {
       await session.endSession();
     }
   }
 
-  async isUserAssociatedWithVendor(userId: string, vendorId: string): Promise<boolean> {
+  async isUserAssociatedWithVendor(
+    userId: string,
+    vendorId: string,
+  ): Promise<boolean> {
     try {
       const vendor = await this.vendorModel
         .findOne({
           _id: vendorId,
-          ownerIds: userId
+          ownerIds: userId,
         })
         .lean();
-  
+
       return !!vendor;
     } catch (error) {
       console.error('Error checking user association with vendor:', error);
-      throw new InternalServerErrorException('Failed to verify vendor association');
+      throw new InternalServerErrorException(
+        'Failed to verify vendor association',
+      );
     }
   }
 
@@ -213,7 +237,57 @@ export class VendorOwnerService {
       }
     } catch (error) {
       console.error('Error removing user from vendors:', error);
-      throw new InternalServerErrorException('Failed to remove user from vendors');
+      throw new InternalServerErrorException(
+        'Failed to remove user from vendors',
+      );
+    }
+  }
+
+  private async notifyOwnersOfVendorApproval(
+    vendor: VendorSchemaClass,
+  ): Promise<void> {
+    try {
+      if (!vendor.ownerIds || vendor.ownerIds.length === 0) {
+        console.log(`No owners found for vendor ${(vendor as any)._id}`); // Changed this line
+        return;
+      }
+
+      // Prepare vendor status URL
+      const frontendDomain = this.configService.get('app.frontendDomain', {
+        infer: true,
+      });
+      const vendorStatusUrl = `${frontendDomain}/vendor/dashboard`;
+
+      for (const ownerId of vendor.ownerIds) {
+        const user = await this.userModel.findById(ownerId);
+        if (!user || !user.email) continue;
+
+        const userName =
+          `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+
+        // Prepare email data
+        const emailData: VendorEmailData = {
+          vendorId: (vendor as any)._id.toString(), // Changed this line
+          vendorName: vendor.businessName,
+          vendorStatus: vendor.vendorStatus,
+          userName,
+          eventType: 'approved',
+          vendorStatusUrl,
+        };
+
+        // Send email
+        await this.mailService.sendVendorApprovedEmail({
+          to: user.email,
+          data: emailData,
+        });
+
+        console.log(
+          `Vendor approval email sent to ${user.email} for vendor ${vendor.businessName}`,
+        );
+      }
+    } catch (error) {
+      console.error('Error sending vendor approval emails:', error);
+      // Don't throw error to prevent disrupting vendor update
     }
   }
 }

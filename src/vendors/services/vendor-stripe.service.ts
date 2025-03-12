@@ -1,4 +1,9 @@
-import { Injectable, InternalServerErrorException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
@@ -10,11 +15,20 @@ import {
   StripeRequirementErrorEnum,
 } from '../infrastructure/persistence/document/entities/vendor.schema';
 import { TransactionSchemaClass } from '../../transactions/infrastructure/persistence/document/entities/transaction.schema';
-import { TransactionStatus, TransactionType } from '../../transactions/infrastructure/persistence/document/entities/transaction.schema';
+import {
+  TransactionStatus,
+  TransactionType,
+} from '../../transactions/infrastructure/persistence/document/entities/transaction.schema';
 import { transformVendorResponse } from '../../utils/vendor.transform';
-import { PayoutSchemaClass, PayoutStatus } from 'src/payout/infrastructure/persistence/document/entities/payout.schema';
+import {
+  PayoutSchemaClass,
+  PayoutStatus,
+} from 'src/payout/infrastructure/persistence/document/entities/payout.schema';
 import { StripeBalanceResponseDto } from '../../stripe-connect/dto/stripe-balance.dto';
 import { StripeConnectService } from '../../stripe-connect/stripe-connect.service';
+import { MailService } from '../../mail/mail.service';
+import { VendorEmailData } from '../../mail/interfaces/vendor-email-data.interface';
+import { UserSchemaClass } from '../../users/infrastructure/persistence/document/entities/user.schema';
 
 @Injectable()
 export class VendorStripeService {
@@ -24,32 +38,42 @@ export class VendorStripeService {
     private readonly vendorModel: Model<VendorSchemaDocument>,
     @InjectModel(PayoutSchemaClass.name)
     private readonly payoutModel: Model<PayoutSchemaClass>,
+    @InjectModel(UserSchemaClass.name)
+    private readonly userModel: Model<UserSchemaClass>,
     private readonly configService: ConfigService,
     private readonly stripeConnectService: StripeConnectService,
+    private readonly mailService: MailService,
   ) {
     this.stripe = new Stripe(
-      this.configService.get<string>('STRIPE_SECRET_KEY', { infer: true }) ?? '',
+      this.configService.get<string>('STRIPE_SECRET_KEY', { infer: true }) ??
+        '',
       {
         apiVersion: '2025-01-27.acacia',
-      }
+      },
     );
   }
 
-  async retrieveAndUpdateStripeBalance(vendorId: string): Promise<StripeBalanceResponseDto> {
+  async retrieveAndUpdateStripeBalance(
+    vendorId: string,
+  ): Promise<StripeBalanceResponseDto> {
     try {
       // Find the vendor to get their Stripe Connect ID
       const vendor = await this.vendorModel.findById(vendorId);
-      
+
       if (!vendor) {
         throw new NotFoundException(`Vendor with ID ${vendorId} not found`);
       }
 
       if (!vendor.stripeConnectId) {
-        throw new InternalServerErrorException('Vendor does not have a Stripe Connect account');
+        throw new InternalServerErrorException(
+          'Vendor does not have a Stripe Connect account',
+        );
       }
 
       // Retrieve balance from Stripe
-      const balance = await this.stripeConnectService.getAccountBalance(vendor.stripeConnectId);
+      const balance = await this.stripeConnectService.getAccountBalance(
+        vendor.stripeConnectId,
+      );
 
       // Update vendor with new balance
       vendor.accountBalance = Math.round(balance.availableBalance * 100);
@@ -66,91 +90,186 @@ export class VendorStripeService {
 
   async updateStripeConnectId(vendorId: string, stripeConnectId: string) {
     try {
-      const updatedVendor = await this.vendorModel.findByIdAndUpdate(
-        vendorId,
-        { 
-          stripeConnectId,
-          updatedAt: new Date()
-        },
-        { new: true }
-      ).lean();
-  
+      const updatedVendor = await this.vendorModel
+        .findByIdAndUpdate(
+          vendorId,
+          {
+            stripeConnectId,
+            updatedAt: new Date(),
+          },
+          { new: true },
+        )
+        .lean();
+
       if (!updatedVendor) {
         throw new NotFoundException(`Vendor with ID ${vendorId} not found`);
       }
-  
+
       return {
         data: transformVendorResponse(updatedVendor),
-        message: 'Stripe Connect ID updated successfully'
+        message: 'Stripe Connect ID updated successfully',
       };
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
       console.error('Error updating Stripe Connect ID:', error);
-      throw new InternalServerErrorException('Failed to update Stripe Connect ID');
+      throw new InternalServerErrorException(
+        'Failed to update Stripe Connect ID',
+      );
     }
   }
 
   async updateStripeStatus(id: string, stripeData: any) {
-    const accountStatus = {
-      chargesEnabled: stripeData.charges_enabled,
-      payoutsEnabled: stripeData.payouts_enabled,
-      detailsSubmitted: stripeData.details_submitted,
-      currentlyDue: stripeData.requirements?.currently_due || [],
-      eventuallyDue: stripeData.requirements?.eventually_due || [],
-      pastDue: stripeData.requirements?.past_due || [],
-      pendingVerification: stripeData.requirements?.pending_verification 
-        ? {
-            details: stripeData.requirements.pending_verification.details,
-            dueBy: stripeData.requirements.pending_verification.due_by 
-              ? new Date(stripeData.requirements.pending_verification.due_by * 1000)
-              : undefined
-          }
-        : undefined,
-      errors: this.mapStripeErrors(stripeData.requirements?.errors || [])
-    };
-  
-    const updatedVendor = await this.vendorModel.findByIdAndUpdate(
-      id,
-      {
-        stripeAccountStatus: accountStatus,
-        updatedAt: new Date()
-      },
-      { new: true }
-    ).lean();
-  
-    if (!updatedVendor) {
-      throw new NotFoundException(`Vendor with ID ${id} not found`);
+    // Check if this is a new "detailsSubmitted" state change
+    let wasDetailsSubmittedChanged = false;
+
+    try {
+      // Get current vendor state to check if this is a status change
+      const currentVendor = await this.vendorModel.findById(id);
+      if (currentVendor) {
+        wasDetailsSubmittedChanged =
+          !currentVendor.stripeAccountStatus?.detailsSubmitted &&
+          stripeData.details_submitted;
+      }
+
+      // Proceed with normal update
+      const accountStatus = {
+        chargesEnabled: stripeData.charges_enabled,
+        payoutsEnabled: stripeData.payouts_enabled,
+        detailsSubmitted: stripeData.details_submitted,
+        currentlyDue: stripeData.requirements?.currently_due || [],
+        eventuallyDue: stripeData.requirements?.eventually_due || [],
+        pastDue: stripeData.requirements?.past_due || [],
+        pendingVerification: stripeData.requirements?.pending_verification
+          ? {
+              details: stripeData.requirements.pending_verification.details,
+              dueBy: stripeData.requirements.pending_verification.due_by
+                ? new Date(
+                    stripeData.requirements.pending_verification.due_by * 1000,
+                  )
+                : undefined,
+            }
+          : undefined,
+        errors: this.mapStripeErrors(stripeData.requirements?.errors || []),
+      };
+
+      const updatedVendor = await this.vendorModel.findByIdAndUpdate(
+        id,
+        {
+          stripeAccountStatus: accountStatus,
+          updatedAt: new Date(),
+        },
+        { new: true },
+      );
+
+      if (!updatedVendor) {
+        throw new NotFoundException(`Vendor with ID ${id} not found`);
+      }
+
+      // If the details were just submitted, send notification emails
+      if (wasDetailsSubmittedChanged && stripeData.details_submitted) {
+        await this.notifyOwnersOfStripeCompletion(updatedVendor, stripeData);
+      }
+
+      return {
+        data: transformVendorResponse(updatedVendor.toObject()),
+        message: 'Stripe account status updated successfully',
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('Error updating Stripe status:', error);
+      throw new InternalServerErrorException(
+        'Failed to update Stripe account status',
+      );
     }
-  
-    return {
-      data: transformVendorResponse(updatedVendor),
-      message: 'Stripe account status updated successfully'
-    };
+  }
+
+  private async notifyOwnersOfStripeCompletion(
+    vendor: VendorSchemaClass,
+    stripeData: any,
+  ): Promise<void> {
+    try {
+      if (!vendor.ownerIds || vendor.ownerIds.length === 0) {
+        console.log(`No owners found for vendor ${(vendor as any)._id}`); // Changed this line
+        return;
+      }
+
+      // Prepare vendor status URL
+      const frontendDomain = this.configService.get('app.frontendDomain', {
+        infer: true,
+      });
+      const vendorStatusUrl = `${frontendDomain}/vendor/status`;
+
+      for (const ownerId of vendor.ownerIds) {
+        const user = await this.userModel.findById(ownerId);
+        if (!user || !user.email) continue;
+
+        const userName =
+          `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+
+        // Prepare email data
+        const emailData: VendorEmailData = {
+          vendorId: (vendor as any)._id.toString(), // Changed this line
+          vendorName: vendor.businessName,
+          vendorStatus: vendor.vendorStatus,
+          userName,
+          eventType: 'stripe-complete',
+          vendorStatusUrl,
+          stripeInfo: {
+            accountId: stripeData.id,
+            chargesEnabled: stripeData.charges_enabled,
+            payoutsEnabled: stripeData.payouts_enabled,
+          },
+        };
+
+        // Send email
+        await this.mailService.sendVendorStripeCompleteEmail({
+          to: user.email,
+          data: emailData,
+        });
+
+        console.log(
+          `Stripe completion email sent to ${user.email} for vendor ${vendor.businessName}`,
+        );
+      }
+    } catch (error) {
+      console.error('Error sending Stripe completion emails:', error);
+      // Don't throw error to prevent disrupting vendor update
+    }
   }
 
   async triggerPayout(vendorId: string) {
     const session = await this.vendorModel.db.startSession();
-    
+
     try {
       let result;
       await session.withTransaction(async () => {
-        const vendor = await this.vendorModel.findById(vendorId).session(session);
+        const vendor = await this.vendorModel
+          .findById(vendorId)
+          .session(session);
         if (!vendor) {
           throw new NotFoundException('Vendor not found');
         }
 
         if (!vendor.stripeConnectId) {
-          throw new UnprocessableEntityException('Vendor does not have Stripe account connected');
+          throw new UnprocessableEntityException(
+            'Vendor does not have Stripe account connected',
+          );
         }
 
         if (!vendor.stripeAccountStatus?.payoutsEnabled) {
-          throw new UnprocessableEntityException('Vendor payouts are not enabled');
+          throw new UnprocessableEntityException(
+            'Vendor payouts are not enabled',
+          );
         }
 
         if (vendor.internalAccountBalance <= 0) {
-          throw new UnprocessableEntityException('No balance available for payout');
+          throw new UnprocessableEntityException(
+            'No balance available for payout',
+          );
         }
 
         const payoutAmount = Math.floor(vendor.internalAccountBalance * 100);
@@ -172,14 +291,17 @@ export class VendorStripeService {
             transferId: payout.id,
             destination: payout.destination,
             sourceType: payout.source_type,
-            transferGroup: payout.transfer_group
+            transferGroup: payout.transfer_group,
           },
-          processedAt: new Date()
+          processedAt: new Date(),
         });
         await payoutRecord.save({ session });
 
         vendor.internalAccountBalance = 0;
-        vendor.vendorPayouts = [...vendor.vendorPayouts, payoutRecord._id.toString()];
+        vendor.vendorPayouts = [
+          ...vendor.vendorPayouts,
+          payoutRecord._id.toString(),
+        ];
         await vendor.save({ session });
 
         result = {
@@ -194,10 +316,13 @@ export class VendorStripeService {
           message: 'Payout scheduled successfully',
         };
       });
-      
+
       return result;
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnprocessableEntityException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof UnprocessableEntityException
+      ) {
         throw error;
       }
       console.error('Error processing vendor payout:', error);
@@ -208,46 +333,54 @@ export class VendorStripeService {
   }
 
   async getStripeStatus(id: string) {
-    const vendor = await this.vendorModel.findById(id)
-      .select('stripeConnectId stripeAccountStatus accountBalance pendingBalance')
+    const vendor = await this.vendorModel
+      .findById(id)
+      .select(
+        'stripeConnectId stripeAccountStatus accountBalance pendingBalance',
+      )
       .lean();
-  
+
     if (!vendor) {
       throw new NotFoundException(`Vendor with ID ${id} not found`);
     }
-  
+
     return {
       data: {
         stripeConnectId: vendor.stripeConnectId,
         accountStatus: vendor.stripeAccountStatus,
         accountBalance: vendor.accountBalance,
-        pendingBalance: vendor.pendingBalance
-      }
+        pendingBalance: vendor.pendingBalance,
+      },
     };
   }
 
-   mapStripeErrors(errors: any[]): StripeRequirement[] {
-    return errors.map(error => ({
+  mapStripeErrors(errors: any[]): StripeRequirement[] {
+    return errors.map((error) => ({
       requirement: error.requirement,
       error: this.mapStripeErrorCode(error.code),
-      dueDate: error.due_by ? new Date(error.due_by * 1000) : undefined
+      dueDate: error.due_by ? new Date(error.due_by * 1000) : undefined,
     }));
   }
 
-   mapStripeErrorCode(code: string): StripeRequirementErrorEnum {
+  mapStripeErrorCode(code: string): StripeRequirementErrorEnum {
     const errorMap: Record<string, StripeRequirementErrorEnum> = {
-      invalid_address_city_state: StripeRequirementErrorEnum.INVALID_ADDRESS_CITY_STATE,
+      invalid_address_city_state:
+        StripeRequirementErrorEnum.INVALID_ADDRESS_CITY_STATE,
       invalid_street_address: StripeRequirementErrorEnum.INVALID_STREET_ADDRESS,
       invalid_postal_code: StripeRequirementErrorEnum.INVALID_POSTAL_CODE,
       invalid_ssn_last_4: StripeRequirementErrorEnum.INVALID_SSN_LAST_4,
       invalid_phone_number: StripeRequirementErrorEnum.INVALID_PHONE_NUMBER,
       invalid_email: StripeRequirementErrorEnum.INVALID_EMAIL,
       invalid_dob: StripeRequirementErrorEnum.INVALID_DOB,
-      verification_failed_other: StripeRequirementErrorEnum.VERIFICATION_FAILED_OTHER,
-      verification_document_failed: StripeRequirementErrorEnum.VERIFICATION_DOCUMENT_FAILED,
-      tax_id_invalid: StripeRequirementErrorEnum.TAX_ID_INVALID
+      verification_failed_other:
+        StripeRequirementErrorEnum.VERIFICATION_FAILED_OTHER,
+      verification_document_failed:
+        StripeRequirementErrorEnum.VERIFICATION_DOCUMENT_FAILED,
+      tax_id_invalid: StripeRequirementErrorEnum.TAX_ID_INVALID,
     };
-    
-    return errorMap[code] || StripeRequirementErrorEnum.VERIFICATION_FAILED_OTHER;
+
+    return (
+      errorMap[code] || StripeRequirementErrorEnum.VERIFICATION_FAILED_OTHER
+    );
   }
 }
