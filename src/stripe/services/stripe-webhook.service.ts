@@ -326,7 +326,6 @@ export class StripeWebhookService {
           );
           return;
         }
-
         // Get the tickets associated with this transaction
         const tickets = await this.ticketService.findByTransactionId(
           transaction.stripeCheckoutSessionId as string,
@@ -337,7 +336,6 @@ export class StripeWebhookService {
           );
           return;
         }
-
         // Send receipt email to customer
         try {
           // Prepare product items for customer email
@@ -350,7 +348,6 @@ export class StripeWebhookService {
               : undefined,
             time: ticket.productStartTime,
           }));
-
           await this.mailService.sendTransactionReceipt({
             to: user.email as string,
             data: {
@@ -371,7 +368,6 @@ export class StripeWebhookService {
           // Log error but don't fail the overall process
           console.error('Error sending receipt email to customer:', emailError);
         }
-
         // Send notification emails to vendors
         try {
           // Group tickets by vendor
@@ -379,19 +375,16 @@ export class StripeWebhookService {
           const customerName =
             `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
             'Customer';
-
           for (const ticket of tickets) {
             if (!ticketsByVendor.has(ticket.vendorId)) {
               ticketsByVendor.set(ticket.vendorId, []);
             }
             ticketsByVendor.get(ticket.vendorId)?.push(ticket);
           }
-
           // Get frontend URL for links
           const frontendUrl = this.configService.get('app.frontendDomain', {
             infer: true,
           });
-
           // Send emails to each vendor
           for (const [vendorId, vendorTickets] of ticketsByVendor.entries()) {
             // Get vendor info to calculate fees and get vendor name
@@ -400,31 +393,26 @@ export class StripeWebhookService {
               console.warn(`Vendor data not found for vendor ID: ${vendorId}`);
               continue;
             }
-
-            // Get vendor owner info to get email address
-            const vendorOwner = await this.userService.findById(
-              vendor.data.ownerId,
-            );
-            if (!vendorOwner || !vendorOwner.email) {
-              console.warn(
-                `Vendor owner email not found for vendor ID: ${vendorId}`,
-              );
+            
+            // Fix: Check for ownerIds array and handle it properly
+            const ownerIds = vendor.data.ownerIds || [];
+            if (!ownerIds.length) {
+              console.warn(`No owner IDs found for vendor ID: ${vendorId}`);
               continue;
             }
-
+            
             // Calculate vendor-specific totals
             const vendorItemsTotal = vendorTickets.reduce(
               (sum, ticket) => sum + ticket.productPrice,
               0,
             );
-
             // Calculate platform fee using vendor's application fee rate
             const feePercentage =
               (vendor.data.vendorApplicationFee || 0.13) * 100; // Convert to percentage
             const platformFee =
               vendorItemsTotal * (vendor.data.vendorApplicationFee || 0.13);
             const vendorEarnings = vendorItemsTotal - platformFee;
-
+            
             // Format items for email
             const items = vendorTickets.map((ticket) => ({
               productName: ticket.productName,
@@ -436,28 +424,44 @@ export class StripeWebhookService {
               time: ticket.productStartTime,
               ticketId: ticket._id,
             }));
-
-            // Send email to vendor
-            await this.mailService.sendVendorSaleNotification({
-              to: vendorOwner.email,
-              data: {
-                vendorName: vendor.data.businessName,
-                customerName,
-                transactionId: transaction._id.toString(),
-                purchaseDate: new Date().toLocaleDateString(),
-                vendorItemsTotal,
-                vendorEarnings,
-                platformFee,
-                feePercentage,
-                items,
-                vendorDashboardUrl: `${frontendUrl}/vendor-account/`,
-                ticketManagementUrl: `${frontendUrl}/ticket-validation`,
-              },
-            });
-
-            console.log(
-              `Sale notification email sent to vendor ${vendor.data.businessName} (${vendorOwner.email})`,
-            );
+            
+            // Fix: Send email to each owner in the ownerIds array
+            let emailSent = false;
+            for (const ownerId of ownerIds) {
+              // Get vendor owner info to get email address
+              const vendorOwner = await this.userService.findById(ownerId);
+              if (!vendorOwner || !vendorOwner.email) {
+                console.warn(`Vendor owner (ID: ${ownerId}) email not found for vendor ID: ${vendorId}`);
+                continue;
+              }
+              
+              // Send email to this owner
+              await this.mailService.sendVendorSaleNotification({
+                to: vendorOwner.email,
+                data: {
+                  vendorName: vendor.data.businessName,
+                  customerName,
+                  transactionId: transaction._id.toString(),
+                  purchaseDate: new Date().toLocaleDateString(),
+                  vendorItemsTotal,
+                  vendorEarnings,
+                  platformFee,
+                  feePercentage,
+                  items,
+                  vendorDashboardUrl: `${frontendUrl}/vendor-account/`,
+                  ticketManagementUrl: `${frontendUrl}/ticket-validation`,
+                },
+              });
+              
+              console.log(
+                `Sale notification email sent to vendor owner ${vendorOwner.email} for vendor ${vendor.data.businessName}`,
+              );
+              emailSent = true;
+            }
+            
+            if (!emailSent) {
+              console.error(`No valid owner emails found for vendor ID: ${vendorId}`);
+            }
           }
         } catch (vendorEmailError) {
           // Log error but don't fail the overall process
