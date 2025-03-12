@@ -28,6 +28,7 @@ export function transformVendorResponse(vendor: Record<string, any>) {
       vendorApplicationFee: vendor.vendorApplicationFee || 0.13,
       vendorPayments: vendor.vendorPayments || [],
       vendorPayouts: vendor.vendorPayouts || [],
+      ownerIds: vendor.ownerIds || [],
       createdAt: vendor.createdAt?.toISOString(),
       updatedAt: vendor.updatedAt?.toISOString()
     };
